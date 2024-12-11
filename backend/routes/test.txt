@@ -1,0 +1,40 @@
+import express from "express";
+import { protect } from "../middleware/authMiddleware.js";
+import * as paymentService from "../../src/store/services/paymentService.js";
+
+const router = express.Router();
+
+// Create payment intent (for GCash)
+router.post("/create-payment-intent", protect, async (req, res) => {
+  try {
+    const { amount, subscriptionId } = req.body;
+    const paymentIntent = await paymentService.createPaymentIntent(amount, subscriptionId);
+    res.json(paymentIntent);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Verify payment
+router.post("/verify-payment", protect, async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    const paymentStatus = await paymentService.verifyPayment(paymentIntentId);
+    res.json({ status: paymentStatus });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Create payment (for credit card)
+router.post("/create-payment", protect, async (req, res) => {
+  try {
+    const { amount, subscriptionId, cardDetails } = req.body;
+    const paymentStatus = await paymentService.createPayment(amount, subscriptionId, cardDetails);
+    res.json({ status: paymentStatus });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+export default router;
