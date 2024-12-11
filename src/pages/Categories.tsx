@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { Plus, Edit2, Trash2 } from "lucide-react";
@@ -12,6 +12,7 @@ import {
 import { handleOfflineAction } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
 import OfflineIndicator from "../components/sales/OfflineIndicator";
+import { getUnsynedCategories } from "../utils/indexedDB";
 
 interface CategoryForm {
   name: string;
@@ -26,6 +27,7 @@ const Categories = () => {
   const [deleteCategory] = useDeleteCategoryMutation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [localCategories, setLocalCategories] = useState<any[]>([]);
 
   const {
     register,
@@ -33,6 +35,43 @@ const Categories = () => {
     reset,
     formState: { errors },
   } = useForm<CategoryForm>();
+
+  // Initialize local categories with server data
+  useEffect(() => {
+    if (categories) {
+      setLocalCategories(categories);
+    }
+  }, [categories]);
+
+  // Load offline categories
+  useEffect(() => {
+    const fetchOfflineCategories = async () => {
+      const unsynedCategories = await getUnsynedCategories();
+      setLocalCategories((prevCategories) => {
+        const updatedCategories = [...prevCategories];
+        unsynedCategories.forEach((unsynedCategory) => {
+          const index = updatedCategories.findIndex(
+            (c) => c._id === unsynedCategory.data._id
+          );
+          if (index !== -1) {
+            if (unsynedCategory.action === "delete") {
+              updatedCategories.splice(index, 1);
+            } else {
+              updatedCategories[index] = {
+                ...updatedCategories[index],
+                ...unsynedCategory.data,
+              };
+            }
+          } else if (unsynedCategory.action === "create") {
+            updatedCategories.push(unsynedCategory.data);
+          }
+        });
+        return updatedCategories;
+      });
+    };
+
+    fetchOfflineCategories();
+  }, []);
 
   const onSubmit = async (data: CategoryForm) => {
     try {
@@ -54,6 +93,12 @@ const Categories = () => {
             updateData
           );
           if (handled) {
+            setLocalCategories((prevCategories) =>
+              prevCategories.map((cat) =>
+                cat._id === updateData._id ? { ...cat, ...updateData } : cat
+              )
+            );
+            toast.success("Category updated. Will sync when online.");
             setIsModalOpen(false);
             reset();
             setEditingCategory(null);
@@ -64,17 +109,40 @@ const Categories = () => {
         await updateCategory(updateData).unwrap();
         toast.success("Category updated successfully");
       } else {
-        await createCategory(categoryData).unwrap();
-        if (networkStatus.isNetworkOnline()) {
-          toast.success("Category created successfully");
-        } else {
-          toast.success("Category saved offline. Will sync when online.");
+        const tempId = `temp_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+        const newCategory = {
+          _id: tempId,
+          ...categoryData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction(
+            "category",
+            "create",
+            newCategory
+          );
+          if (handled) {
+            setLocalCategories((prevCategories) => [...prevCategories, newCategory]);
+            toast.success("Category created. Will sync when online.");
+            setIsModalOpen(false);
+            reset();
+            return;
+          }
         }
+
+        const createdCategory = await createCategory(categoryData).unwrap();
+        setLocalCategories((prevCategories) => [...prevCategories, createdCategory]);
+        toast.success("Category created successfully");
       }
       setIsModalOpen(false);
       reset();
       setEditingCategory(null);
     } catch (error) {
+      toast.error("Operation failed");
       setIsModalOpen(false);
       reset();
       setEditingCategory(null);
@@ -88,10 +156,19 @@ const Categories = () => {
           const handled = await handleOfflineAction("category", "delete", {
             _id: id,
           });
-          if (handled) return;
+          if (handled) {
+            setLocalCategories((prevCategories) =>
+              prevCategories.filter((cat) => cat._id !== id)
+            );
+            toast.success("Category deleted. Will sync when online.");
+            return;
+          }
         }
 
         await deleteCategory(id).unwrap();
+        setLocalCategories((prevCategories) =>
+          prevCategories.filter((cat) => cat._id !== id)
+        );
         toast.success("Category deleted successfully");
       } catch (error) {
         toast.error("Failed to delete category");
@@ -135,7 +212,7 @@ const Categories = () => {
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-gray-200">
-              {categories?.map((category) => (
+              {localCategories?.map((category) => (
                 <tr key={category._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
                     {category.name}
