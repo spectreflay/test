@@ -1,6 +1,6 @@
-import { api } from "../api";
-import { createNotification } from "../../utils/notification";
-import { getStockAlertMessage, shouldCreateStockAlert } from "../../utils/inventory";
+import { api } from '../api';
+import { networkStatus } from '../../utils/networkStatus';
+import { handleOfflineAction } from '../../utils/offlineStorage';
 
 export interface Product {
   _id: string;
@@ -45,58 +45,130 @@ export const productApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getProducts: builder.query<Product[], string>({
       query: (storeId) => `products/${storeId}`,
-      providesTags: ["Products"],
-      async onCacheEntryAdded(
-        arg,
-        { updateCachedData, cacheDataLoaded, cacheEntryRemoved, dispatch, getState }
-      ) {
-        try {
-          await cacheDataLoaded;
-
-          const state = getState() as any;
-          const store = state.api.queries[`getStore(${arg})`]?.data;
-
-          if (store?.settings) {
-            const products = await cacheDataLoaded;
-            products.forEach((product) => {
-              if (shouldCreateStockAlert(product.stock, store.settings)) {
-                const message = getStockAlertMessage(product.name, product.stock, store.settings);
-                createNotification(dispatch, message, 'alert', product.store);
-              }
-            });
-          }
-
-          await cacheEntryRemoved;
-        } catch (error) {
-          console.error('Error checking product stock levels:', error);
-        }
-      },
+      providesTags: ['Products'],
     }),
     createProduct: builder.mutation<Product, CreateProductRequest>({
       query: (productData) => ({
-        url: "products",
-        method: "POST",
+        url: 'products',
+        method: 'POST',
         body: productData,
       }),
-      invalidatesTags: ["Products"],
+      async onQueryStarted(product, { dispatch, queryFulfilled }) {
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const optimisticProduct = {
+          _id: tempId,
+          ...product,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        if (!networkStatus.isNetworkOnline()) {
+          await handleOfflineAction('product', 'create', optimisticProduct);
+          dispatch(
+            productApi.util.updateQueryData('getProducts', product.store, (draft) => {
+              draft.push(optimisticProduct);
+            })
+          );
+          return;
+        }
+
+        try {
+          const { data: createdProduct } = await queryFulfilled;
+          dispatch(
+            productApi.util.updateQueryData('getProducts', product.store, (draft) => {
+              const index = draft.findIndex((prod) => prod._id === tempId);
+              if (index !== -1) {
+                draft[index] = createdProduct;
+              } else {
+                draft.push(createdProduct);
+              }
+            })
+          );
+        } catch {
+          dispatch(
+            productApi.util.updateQueryData('getProducts', product.store, (draft) => {
+              const index = draft.findIndex((prod) => prod._id === tempId);
+              if (index !== -1) {
+                draft.splice(index, 1);
+              }
+            })
+          );
+        }
+      },
+      invalidatesTags: ['Products'],
     }),
-    updateProduct: builder.mutation<
-      Product,
-      Partial<Product> & Pick<Product, "_id">
-    >({
+    updateProduct: builder.mutation<Product, Partial<Product> & Pick<Product, '_id'>>({
       query: ({ _id, ...patch }) => ({
         url: `products/${_id}`,
-        method: "PUT",
+        method: 'PUT',
         body: patch,
       }),
-      invalidatesTags: ["Products"],
+      async onQueryStarted({ _id, ...patch }, { dispatch, queryFulfilled }) {
+        if (!networkStatus.isNetworkOnline()) {
+          await handleOfflineAction('product', 'update', { _id, ...patch });
+          dispatch(
+            productApi.util.updateQueryData('getProducts', patch.store!, (draft) => {
+              const index = draft.findIndex((prod) => prod._id === _id);
+              if (index !== -1) {
+                Object.assign(draft[index], patch);
+              }
+            })
+          );
+          return;
+        }
+
+        const patchResult = dispatch(
+          productApi.util.updateQueryData('getProducts', patch.store!, (draft) => {
+            const index = draft.findIndex((prod) => prod._id === _id);
+            if (index !== -1) {
+              Object.assign(draft[index], patch);
+            }
+          })
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+      invalidatesTags: ['Products'],
     }),
     deleteProduct: builder.mutation<void, string>({
       query: (id) => ({
         url: `products/${id}`,
-        method: "DELETE",
+        method: 'DELETE',
       }),
-      invalidatesTags: ["Products", "Categories", "Inventory"],
+      async onQueryStarted(id, { dispatch, queryFulfilled }) {
+        if (!networkStatus.isNetworkOnline()) {
+          await handleOfflineAction('product', 'delete', { _id: id });
+          dispatch(
+            productApi.util.updateQueryData('getProducts', '', (draft) => {
+              const index = draft.findIndex((prod) => prod._id === id);
+              if (index !== -1) {
+                draft.splice(index, 1);
+              }
+            })
+          );
+          return;
+        }
+
+        const patchResult = dispatch(
+          productApi.util.updateQueryData('getProducts', '', (draft) => {
+            const index = draft.findIndex((prod) => prod._id === id);
+            if (index !== -1) {
+              draft.splice(index, 1);
+            }
+          })
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+      invalidatesTags: ['Products', 'Categories', 'Inventory'],
     }),
   }),
 });
@@ -107,3 +179,4 @@ export const {
   useUpdateProductMutation,
   useDeleteProductMutation,
 } = productApi;
+

@@ -13,7 +13,7 @@ interface TopProductsProps {
 
 const TopProducts: React.FC<TopProductsProps> = ({ products }) => {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-card rounded-lg shadow p-6">
       <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
         <Package className="h-5 w-5" />
         Top Selling Products

@@ -1,19 +1,19 @@
-import express from 'express';
-import { protect } from '../middleware/authMiddleware.js';
-import Notification from '../models/notificationModel.js';
+import express from "express";
+import { protect } from "../middleware/authMiddleware.js";
+import Notification from "../models/notificationModel.js";
 
 const router = express.Router();
 
 // Get notifications for the current user
-router.get('/', protect, async (req, res) => {
+router.get("/", protect, async (req, res) => {
   try {
     const query = {
       recipient: req.user._id,
-      recipientModel: req.user.store ? 'Staff' : 'User'
+      recipientModel: req.user.store ? "Staff" : "User",
     };
 
     const notifications = await Notification.find(query)
-      .sort('-createdAt')
+      .sort("-createdAt")
       .limit(10);
 
     res.json(notifications);
@@ -23,16 +23,16 @@ router.get('/', protect, async (req, res) => {
 });
 
 // Mark notification as read
-router.put('/:id/read', protect, async (req, res) => {
+router.put("/:id/read", protect, async (req, res) => {
   try {
     const notification = await Notification.findOne({
       _id: req.params.id,
       recipient: req.user._id,
-      recipientModel: req.user.store ? 'Staff' : 'User'
+      recipientModel: req.user.store ? "Staff" : "User",
     });
-    
+
     if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
+      return res.status(404).json({ message: "Notification not found" });
     }
 
     notification.read = true;
@@ -44,37 +44,60 @@ router.put('/:id/read', protect, async (req, res) => {
   }
 });
 
+// Delete all notifications
+router.delete("/allNotifications", protect, async (req, res) => {
+  console.log("Request Method:", req.method);
+  console.log("Request Path:", req.path);
+  console.log("Authenticated User:", req.user);
+  try {
+    await Notification.deleteMany({
+      recipient: req.user._id,
+      recipientModel: req.user.store ? "Staff" : "User",
+    });
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting notifications:", error);
+    res.status(500).json({ message: "Failed to delete notifications" });
+  }
+});
+
 // Delete notification
-router.delete('/:id', protect, async (req, res) => {
+router.delete("/:id", protect, async (req, res) => {
   try {
     const notification = await Notification.findOne({
       _id: req.params.id,
       recipient: req.user._id,
-      recipientModel: req.user.store ? 'Staff' : 'User'
+      recipientModel: req.user.store ? "Staff" : "User",
     });
-    
+
     if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
+      return res.status(404).json({ message: "Notification not found" });
     }
 
     await notification.deleteOne();
-    res.json({ message: 'Notification deleted' });
+    res.json({ message: "Notification deleted" });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 });
 
 // Create system notification
-router.post('/system', protect, async (req, res) => {
+router.post("/system", protect, async (req, res) => {
   try {
-    const { message, type = 'system', store, recipientId, recipientModel } = req.body;
-    
+    const {
+      message,
+      type = "system",
+      store,
+      recipientId,
+      recipientModel,
+    } = req.body;
+
     const notification = await Notification.create({
       message,
       type,
       store,
       recipient: recipientId || req.user._id,
-      recipientModel: recipientModel || (req.user.store ? 'Staff' : 'User')
+      recipientModel: recipientModel || (req.user.store ? "Staff" : "User"),
     });
 
     res.status(201).json(notification);

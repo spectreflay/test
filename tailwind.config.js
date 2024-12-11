@@ -6,6 +6,16 @@ export default {
     extend: {
       colors: {
         background: "hsl(var(--background))",
+        "secondary-background": "hsl(var(--secondary-background))",
+        "primary-background": "hsl(var(--primary-background))",
+        table: {
+          background: "hsl(var(--table-background))", // Table background
+          rowHover: "hsl(var(--table-row-hover))", // Table row hover
+          border: "hsl(var(--table-border))", // Table border
+          headerText: "hsl(var(--table-header-text))", // Table header text
+          text: "hsl(var(--table-text))", // Table text
+        },
+
         foreground: "hsl(var(--foreground))",
         card: "hsl(var(--card))",
         "card-foreground": "hsl(var(--card-foreground))",

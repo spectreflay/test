@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Package, Plus, Edit2, Trash2 } from "lucide-react";
+import { Package, Plus, Edit2, Trash2 } from 'lucide-react';
 import { toast } from "react-hot-toast";
 import { useGetCategoriesQuery } from "../store/services/categoryService";
 import {
@@ -13,7 +13,11 @@ import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionSe
 import { checkSubscriptionLimit } from "../utils/subscriptionLimits";
 import ProductForm from "../components/products/ProductForm";
 import UpgradeModal from "../components/subscription/UpgradeModal";
-
+import { handleOfflineAction } from "../utils/offlineStorage";
+import { networkStatus } from "../utils/networkStatus";
+import OfflineIndicator from "../components/sales/OfflineIndicator";
+import { useDispatch } from 'react-redux';
+import { getUnsynedProducts } from "../utils/indexedDB";
 
 const Products = () => {
   const { storeId } = useParams<{ storeId: string }>();
@@ -24,16 +28,50 @@ const Products = () => {
   const [updateProduct] = useUpdateProductMutation();
   const [deleteProduct] = useDeleteProductMutation();
 
+  const dispatch = useDispatch();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [modifiers, setModifiers] = useState<any[]>([]);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [localProducts, setLocalProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (products) {
+      setLocalProducts(products);
+    }
+  }, [products]);
+
+  useEffect(() => {
+    const fetchOfflineProducts = async () => {
+      const unsynedProducts = await getUnsynedProducts();
+      setLocalProducts((prevProducts) => {
+        const updatedProducts = [...prevProducts];
+        unsynedProducts.forEach((unsynedProduct) => {
+          const index = updatedProducts.findIndex((p) => p._id === unsynedProduct.data._id);
+          if (index !== -1) {
+            if (unsynedProduct.action === 'delete') {
+              updatedProducts.splice(index, 1);
+            } else {
+              updatedProducts[index] = { ...updatedProducts[index], ...unsynedProduct.data };
+            }
+          } else if (unsynedProduct.action === 'create') {
+            updatedProducts.push(unsynedProduct.data);
+          }
+        });
+        return updatedProducts;
+      });
+    };
+
+    fetchOfflineProducts();
+  }, []);
 
   const resetForm = () => {
     setEditingProduct(null);
     setModifiers([]);
     setIsModalOpen(false);
   };
+
   const handleAddModifier = () => {
     setModifiers([
       ...modifiers,
@@ -130,25 +168,78 @@ const Products = () => {
       };
 
       if (editingProduct) {
-        await updateProduct({
+        const updateData = {
           _id: editingProduct._id,
           ...productData,
-        }).unwrap();
+        };
+
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction(
+            "product",
+            "update",
+            updateData
+          );
+          if (handled) {
+            setLocalProducts((prevProducts) =>
+              prevProducts.map((p) => (p._id === updateData._id ? updateData : p))
+            );
+            toast.success("Product updated. Will sync when online.");
+            resetForm();
+            return;
+          }
+        }
+
+        await updateProduct(updateData).unwrap();
         toast.success("Product updated successfully");
       } else {
-        await createProduct(productData).unwrap();
+        if (!networkStatus.isNetworkOnline()) {
+          const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const newProduct = {
+            _id: tempId,
+            ...productData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          const handled = await handleOfflineAction(
+            "product",
+            "create",
+            newProduct
+          );
+          if (handled) {
+            setLocalProducts((prevProducts) => [...prevProducts, newProduct]);
+            toast.success("Product created. Will sync when online.");
+            resetForm();
+            return;
+          }
+        }
+
+        const createdProduct = await createProduct(productData).unwrap();
+        setLocalProducts((prevProducts) => [...prevProducts, createdProduct]);
         toast.success("Product created successfully");
       }
       resetForm();
     } catch (error) {
       toast.error("Operation failed");
+      resetForm();
     }
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
       try {
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction("product", "delete", {
+            _id: id,
+          });
+          if (handled) {
+            setLocalProducts((prevProducts) => prevProducts.filter((p) => p._id !== id));
+            toast.success("Product deleted. Will sync when online.");
+            return;
+          }
+        }
+
         await deleteProduct(id).unwrap();
+        setLocalProducts((prevProducts) => prevProducts.filter((p) => p._id !== id));
         toast.success("Product deleted successfully");
       } catch (error) {
         toast.error("Failed to delete product");
@@ -162,7 +253,7 @@ const Products = () => {
     <>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
             <Package className="h-6 w-6" />
             Products
           </h1>
@@ -176,10 +267,10 @@ const Products = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {products?.map((product) => (
+          {localProducts.map((product) => (
             <div
               key={product._id}
-              className="bg-white rounded-lg shadow-md overflow-hidden"
+              className="bg-card overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-lg transition-shadow"
             >
               {product.image && (
                 <img
@@ -189,17 +280,17 @@ const Products = () => {
                 />
               )}
               <div className="p-4">
-                <h3 className="text-lg font-medium text-gray-900">
+                <h3 className="text-lg font-medium text-primary">
                   {product.name}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-400">
                   {product.description}
                 </p>
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="text-lg font-bold text-gray-900">
+                  <span className="text-lg font-bold text-primary">
                     ${product.price.toFixed(2)}
                   </span>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-400">
                     Stock: {product.stock}
                   </span>
                 </div>
@@ -226,6 +317,7 @@ const Products = () => {
           ))}
         </div>
       </div>
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -255,8 +347,11 @@ const Products = () => {
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
+
+      <OfflineIndicator />
     </>
   );
 };
 
 export default Products;
+

@@ -6,7 +6,13 @@ import { Toaster } from 'react-hot-toast';
 import { HelmetProvider } from 'react-helmet-async';
 import App from './App';
 import { store } from './store';
+import { syncManager } from './utils/syncManager';
 import './index.css';
+
+// Initialize sync manager
+window.addEventListener('beforeunload', () => {
+  syncManager.cleanup();
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

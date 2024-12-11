@@ -16,7 +16,7 @@ const ProductGrid = ({ products, onProductSelect }: ProductGridProps) => {
           <button
             key={product._id}
             onClick={() => !isOutOfStock && onProductSelect(product)}
-            className={`p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-left relative ${
+            className={`p-4 bg-card rounded-lg shadow hover:shadow-md transition-shadow text-left relative ${
               isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
             }`}
             disabled={isOutOfStock}
@@ -35,7 +35,7 @@ const ProductGrid = ({ products, onProductSelect }: ProductGridProps) => {
                 className="w-full h-32 object-cover rounded-lg mb-2"
               />
             )}
-            <h3 className="font-medium truncate">{product.name}</h3>
+            <h3 className="font-medium truncate text-primary">{product.name}</h3>
             <div className="flex justify-between items-center mt-1 flex-wrap">
               <p className="text-sm text-gray-500">${product.price.toFixed(2)}</p>
               <p className={`text-sm ${isOutOfStock ? 'text-red-500' : 'text-gray-500'}`}>

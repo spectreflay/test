@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { ShoppingCart, History, Tag, Menu, X } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -17,6 +17,10 @@ import Receipt from "../components/sales/Receipt";
 import SalesHistory from "../components/sales/SalesHistory";
 import DiscountModal from "../components/sales/DiscountModal";
 import { CartItem as CartItemType } from "../components/sales/types";
+import { networkStatus } from "../utils/networkStatus";
+import { saveOfflineSale } from "../utils/indexedDB";
+import OfflineIndicator from "../components/sales/OfflineIndicator";
+import { syncManager } from "../utils/syncManager";
 
 const Sales = () => {
   const { storeId } = useParams<{ storeId: string }>();
@@ -36,6 +40,13 @@ const Sales = () => {
   const [lastSaleData, setLastSaleData] = useState<any>(null);
   const [orderDiscount, setOrderDiscount] = useState<any>(null);
   const [showCart, setShowCart] = useState(false);
+
+  // Initialize sync when component mounts
+  useEffect(() => {
+    if (networkStatus.isNetworkOnline()) {
+      syncManager.syncOfflineData();
+    }
+  }, []);
 
   const filteredProducts = products?.filter((product: any) => {
     const matchesCategory =
@@ -67,7 +78,6 @@ const Sales = () => {
         },
       ]);
     }
-    // Show cart on mobile when adding items
     setShowCart(true);
   };
 
@@ -210,15 +220,34 @@ const Sales = () => {
         paymentDetails: details,
       };
 
-      const result = await createSale(saleData).unwrap();
-      setShowPaymentModal(false);
-      setLastSaleData({
-        ...result,
-        paymentMethod: method,
-        paymentDetails: details,
-      });
-      setShowReceipt(true);
-      toast.success("Payment processed successfully");
+      if (networkStatus.isNetworkOnline()) {
+        // Online flow
+        const result = await createSale(saleData).unwrap();
+        setShowPaymentModal(false);
+        setLastSaleData({
+          ...result,
+          paymentMethod: method,
+          paymentDetails: details,
+        });
+        setShowReceipt(true);
+        toast.success("Payment processed successfully");
+      } else {
+        // Offline flow
+        const offlineSaleId = await saveOfflineSale(saleData);
+        setShowPaymentModal(false);
+        setLastSaleData({
+          ...saleData,
+          _id: offlineSaleId,
+          createdAt: new Date().toISOString(),
+          status: "pending_sync",
+        });
+        setShowReceipt(true);
+        toast.success("Payment saved offline. Will sync when online.");
+      }
+
+      // Reset cart state
+      setCart([]);
+      setOrderDiscount(null);
     } catch (error) {
       toast.error("Failed to process payment");
     }
@@ -290,7 +319,7 @@ const Sales = () => {
       {/* Cart Area */}
       <div
         className={`${
-          showCart ? "fixed inset-0 z-40 bg-white" : "hidden"
+          showCart ? "fixed inset-0 z-40 bg-card" : "hidden"
         } lg:relative lg:block lg:w-96 lg:bg-white lg:rounded-lg lg:shadow-lg`}
       >
         <div className="flex items-center justify-between p-4 border-b">
@@ -398,6 +427,8 @@ const Sales = () => {
           currentTotal={calculateSubtotal()}
         />
       )}
+
+      <OfflineIndicator />
     </div>
   );
 };

@@ -24,7 +24,7 @@ const InventoryFilters = ({
 }: InventoryFiltersProps) => {
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow mb-6">
+    <div className="bg-card p-4 rounded-lg shadow mb-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -33,7 +33,7 @@ const InventoryFilters = ({
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search products..."
-            className="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="pl-10 py-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           />
         </div>
 
@@ -41,7 +41,7 @@ const InventoryFilters = ({
           <select
             value={selectedCategory}
             onChange={(e) => onCategoryChange(e.target.value)}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="py-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           >
             <option value="">All Categories</option>
             {categories.map((category) => (
@@ -56,7 +56,7 @@ const InventoryFilters = ({
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value)}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="py-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           >
             <option value="name">Name (A-Z)</option>
             <option value="-name">Name (Z-A)</option>

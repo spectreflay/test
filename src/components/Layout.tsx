@@ -18,7 +18,7 @@ const Layout = () => {
       >
         <Header />
         <SubscriptionAlert />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-primary-background p-6">
           <Outlet />
         </main>
       </div>

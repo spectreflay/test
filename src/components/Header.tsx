@@ -45,11 +45,11 @@ const Header = () => {
     hasPermission(staff?.role?.permissions, PERMISSIONS.MANAGE_SETTINGS);
 
   return (
-    <header className="bg-white shadow">
+    <header className="bg-accent shadow">
       <div className="flex justify-between items-center px-4 py-4 sm:px-6 lg:px-8">
         <button
           type="button"
-          className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+          className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-foreground hover:text-gray-500 hover:bg-accent"
         >
           <MenuIcon className="h-6 w-6" />
         </button>
@@ -59,7 +59,7 @@ const Header = () => {
             <button
               type="button"
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none"
+              className="p-1 rounded-full text-foreground hover:text-gray-500 focus:outline-none"
             >
               <Bell className="h-6 w-6" />
               {unreadCount > 0 && (
@@ -85,20 +85,20 @@ const Header = () => {
                   {displayName.charAt(0).toUpperCase()}
                 </span>
               </div>
-              <span className="text-sm font-medium text-gray-700 hidden sm:block">
+              <span className="text-sm font-medium text-foreground hidden sm:block">
                 {displayName}
               </span>
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 md:left-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+              <div className="absolute right-0 md:left-0 mt-2 w-48 rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5">
                 <div className="py-1">
                   <button
                     onClick={() => {
                       setShowProfileModal(true);
                       setShowUserMenu(false);
                     }}
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                    className="flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent w-full text-left"
                   >
                     <User className="h-4 w-4 mr-3" />
                     Profile
@@ -108,7 +108,7 @@ const Header = () => {
                       navigate("/subscription");
                       setShowUserMenu(false);
                     }}
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                    className="flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent w-full text-left"
                   >
                     <SubscriptIcon className="h-4 w-4 mr-3" />
                     Subscription
@@ -118,14 +118,14 @@ const Header = () => {
                       setShowProfileModal(true);
                       setShowUserMenu(false);
                     }}
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                    className="flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent w-full text-left"
                   >
                     <Settings className="h-4 w-4 mr-3" />
                     Settings
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                    className="flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent w-full text-left"
                   >
                     <LogOut className="h-4 w-4 mr-3" />
                     Logout

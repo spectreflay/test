@@ -18,11 +18,11 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   color,
 }) => {
   const CardContent = () => (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+    <div className="bg-card rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-gray-500 text-sm">{title}</p>
-          <p className="text-2xl font-semibold mt-1">{value}</p>
+          <p className="text-2xl font-semibold mt-1 text-primary">{value}</p>
         </div>
         <div className={`p-3 rounded-full ${color}`}>
           <Icon className="h-6 w-6 text-white" />

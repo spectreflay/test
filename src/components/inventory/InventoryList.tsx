@@ -49,31 +49,31 @@ const InventoryList: React.FC<InventoryListProps> = ({
   };
 
   return (
-    <div className="bg-white shadow-md rounded-lg overflow-hidden">
+    <div className="bg-card shadow-md rounded-lg overflow-hidden">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+        <thead className="bg-card">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-primary uppercase tracking-wider">
               Product
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-primary uppercase tracking-wider">
               Category
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-primary uppercase tracking-wider">
               Stock
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-primary uppercase tracking-wider">
               Price
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-primary uppercase tracking-wider">
               Last Updated
             </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-right text-xs font-medium text-primary uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-card divide-y divide-gray-200">
           {displayedProducts.map((product) => {
             const stockStatus = getStockStatus(product.stock);
             const statusColor = getStockStatusColor(product.stock, storeSettings);
@@ -90,16 +90,16 @@ const InventoryList: React.FC<InventoryListProps> = ({
                       />
                     )}
                     <div>
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-foreground">
                         {product.name}
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-400">
                         {product.description}
                       </div>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                   {getCategoryName(product.category._id)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -115,7 +115,7 @@ const InventoryList: React.FC<InventoryListProps> = ({
                     {stockStatus.text}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                   ${product.price.toFixed(2)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -124,13 +124,13 @@ const InventoryList: React.FC<InventoryListProps> = ({
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
                     onClick={() => onEdit(product)}
-                    className="text-indigo-600 hover:text-indigo-900 mr-2"
+                    className="text-foreground hover:text-secondary mr-2"
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => onViewHistory(product)}
-                    className="text-indigo-600 hover:text-indigo-900"
+                    className="text-foreground hover:text-secondary"
                   >
                     <Clock className="h-4 w-4" />
                   </button>

@@ -117,7 +117,7 @@ const Reports = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
           <BarChart2 className="h-6 w-6" />
           Reports
         </h1>
@@ -135,7 +135,7 @@ const Reports = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="bg-card p-6 rounded-lg shadow">
             <h2 className="text-lg font-medium mb-4">Sales Trend</h2>
             <SalesChart data={chartData} />
           </div>

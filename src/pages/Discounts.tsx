@@ -77,7 +77,7 @@ const Discounts = () => {
     <>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
             <Tag className="h-6 w-6" />
             Discounts & Promotions
           </h1>
@@ -98,12 +98,12 @@ const Discounts = () => {
           {discounts?.map((discount) => (
             <div
               key={discount._id}
-              className="bg-white rounded-lg shadow-md overflow-hidden"
+              className="bg-card rounded-lg shadow-md overflow-hidden"
             >
               <div className="p-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">
+                    <h3 className="text-lg font-medium text-primary">
                       {discount.name}
                     </h3>
                     <p className="mt-1 text-sm text-gray-500">
@@ -160,7 +160,7 @@ const Discounts = () => {
                       reset(discount);
                       setIsModalOpen(true);
                     }}
-                    className="text-indigo-600 hover:text-indigo-900"
+                    className="text-primary hover:text-primary-hover"
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>

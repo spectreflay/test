@@ -14,7 +14,7 @@ const CategoryFilter = ({ categories, selectedCategory, onCategorySelect }: Cate
         onClick={() => onCategorySelect('all')}
         className={`px-4 py-2 rounded-lg whitespace-nowrap flex-shrink-0 ${
           selectedCategory === 'all'
-            ? 'bg-secondary text-white'
+            ? 'bg-primary text-white'
             : 'bg-gray-100 hover:bg-gray-200'
         }`}
       >
@@ -26,7 +26,7 @@ const CategoryFilter = ({ categories, selectedCategory, onCategorySelect }: Cate
           onClick={() => onCategorySelect(category._id)}
           className={`px-4 py-2 rounded-lg whitespace-nowrap flex-shrink-0 ${
             selectedCategory === category._id
-              ? 'bg-secondary text-white'
+              ? 'bg-primary text-white'
               : 'bg-gray-100 hover:bg-gray-200'
           }`}
         >

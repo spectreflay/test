@@ -1,28 +1,33 @@
-import React from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
-import { Bell, Info, AlertTriangle, X } from 'lucide-react';
-import { 
-  useGetNotificationsQuery, 
+import React from "react";
+import { format, formatDistanceToNow } from "date-fns";
+import { Bell, Info, AlertTriangle, X } from "lucide-react";
+import {
+  useGetNotificationsQuery,
   useMarkAsReadMutation,
-  useDeleteNotificationMutation 
-} from '../../store/services/notificationService';
+  useDeleteNotificationMutation,
+  useDeleteAllNotificationsMutation,
+} from "../../store/services/notificationService";
 
 interface NotificationListProps {
   onClose: () => void;
 }
 
 const NotificationList: React.FC<NotificationListProps> = ({ onClose }) => {
-  const { data: notifications, isLoading } = useGetNotificationsQuery(undefined, {
-    pollingInterval: 30000, // Poll every 30 seconds
-  });
+  const { data: notifications, isLoading } = useGetNotificationsQuery(
+    undefined,
+    {
+      pollingInterval: 30000, // Poll every 30 seconds
+    }
+  );
   const [markAsRead] = useMarkAsReadMutation();
   const [deleteNotification] = useDeleteNotificationMutation();
+  const [deleteAllNotifications] = useDeleteAllNotificationsMutation();
 
   const handleNotificationClick = async (id: string) => {
     try {
       await markAsRead(id).unwrap();
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      console.error("Failed to mark notification as read:", error);
     }
   };
 
@@ -31,15 +36,23 @@ const NotificationList: React.FC<NotificationListProps> = ({ onClose }) => {
     try {
       await deleteNotification(id).unwrap();
     } catch (error) {
-      console.error('Failed to delete notification:', error);
+      console.error("Failed to delete notification:", error);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    try {
+      await deleteAllNotifications().unwrap();
+    } catch (error) {
+      console.error("Failed to delete all notifications:", error);
     }
   };
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'system':
+      case "system":
         return <Bell className="h-5 w-5 text-indigo-500" />;
-      case 'alert':
+      case "alert":
         return <AlertTriangle className="h-5 w-5 text-red-500" />;
       default:
         return <Info className="h-5 w-5 text-blue-500" />;
@@ -56,21 +69,25 @@ const NotificationList: React.FC<NotificationListProps> = ({ onClose }) => {
 
   return (
     <div className="py-2">
-      <div className="px-4 py-2 text-sm font-medium text-gray-700 border-b">
-        Notifications
+      <div className="px-4 py-2 text-sm font-medium text-gray-700 border-b flex justify-between items-center">
+        <span>Notifications</span>
+        <button
+          onClick={handleDeleteAll}
+          className="text-red-500 hover:text-red-700"
+        >
+          Clear All
+        </button>
       </div>
       <div className="max-h-[400px] overflow-y-auto">
         {!notifications || notifications.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">
-            No notifications
-          </div>
+          <div className="p-4 text-center text-gray-500">No notifications</div>
         ) : (
           notifications.map((notification) => (
             <div
               key={notification._id}
               onClick={() => handleNotificationClick(notification._id)}
               className={`px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-start gap-3 relative group ${
-                notification.read ? 'opacity-75' : ''
+                notification.read ? "opacity-75" : ""
               }`}
             >
               <div className="flex-shrink-0 mt-1">

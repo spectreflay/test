@@ -10,7 +10,7 @@ interface ReportCardProps {
 
 const ReportCard = ({ title, value, icon: Icon, description }: ReportCardProps) => {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-card rounded-lg shadow p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500">{title}</p>

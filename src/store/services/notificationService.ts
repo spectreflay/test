@@ -1,11 +1,11 @@
-import { api } from '../api';
+import { api } from "../api";
 
 export interface Notification {
   _id: string;
   recipient: string;
-  recipientModel: 'User' | 'Staff';
+  recipientModel: "User" | "Staff";
   message: string;
-  type: 'system' | 'alert' | 'info';
+  type: "system" | "alert" | "info";
   read: boolean;
   store?: string;
   createdAt: string;
@@ -14,39 +14,50 @@ export interface Notification {
 
 export interface CreateNotificationRequest {
   message: string;
-  type?: 'system' | 'alert' | 'info';
+  type?: "system" | "alert" | "info";
   store?: string;
   recipientId?: string;
-  recipientModel?: 'User' | 'Staff';
+  recipientModel?: "User" | "Staff";
 }
 
 export const notificationApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getNotifications: builder.query<Notification[], void>({
-      query: () => 'notifications',
-      providesTags: ['Notifications'],
+      query: () => "notifications",
+      providesTags: ["Notifications"],
     }),
     markAsRead: builder.mutation<Notification, string>({
       query: (id) => ({
         url: `notifications/${id}/read`,
-        method: 'PUT',
+        method: "PUT",
       }),
-      invalidatesTags: ['Notifications'],
+      invalidatesTags: ["Notifications"],
     }),
     deleteNotification: builder.mutation<void, string>({
       query: (id) => ({
         url: `notifications/${id}`,
-        method: 'DELETE',
+        method: "DELETE",
       }),
-      invalidatesTags: ['Notifications'],
+      invalidatesTags: ["Notifications"],
     }),
-    createSystemNotification: builder.mutation<Notification, CreateNotificationRequest>({
+    createSystemNotification: builder.mutation<
+      Notification,
+      CreateNotificationRequest
+    >({
       query: (data) => ({
-        url: 'notifications/system',
-        method: 'POST',
+        url: "notifications/system",
+        method: "POST",
         body: data,
       }),
-      invalidatesTags: ['Notifications'],
+      invalidatesTags: ["Notifications"],
+    }),
+    // Add this to your notificationApi in notificationService.ts
+    deleteAllNotifications: builder.mutation<void, void>({
+      query: () => ({
+        url: "notifications/allNotifications",
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Notifications"],
     }),
   }),
 });
@@ -56,4 +67,5 @@ export const {
   useMarkAsReadMutation,
   useDeleteNotificationMutation,
   useCreateSystemNotificationMutation,
+  useDeleteAllNotificationsMutation,
 } = notificationApi;

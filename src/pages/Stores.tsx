@@ -120,7 +120,7 @@ const Stores = () => {
   return (
     <div className="">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
           <Store className="h-6 w-6" />
           Stores
         </h1>
@@ -136,7 +136,7 @@ const Stores = () => {
       {!stores || stores.length === 0 ? (
         <div className="text-center py-12">
           <Store className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No stores</h3>
+          <h3 className="mt-2 text-sm font-medium text-primary">No stores</h3>
           <p className="mt-1 text-sm text-gray-500">
             Get started by creating a new store.
           </p>
@@ -155,7 +155,7 @@ const Stores = () => {
           {stores.map((store) => (
             <div
               key={store._id}
-              className="bg-white overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-lg transition-shadow"
+              className="bg-card overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-lg transition-shadow"
               onClick={() => handleStoreSelect(store._id)}
             >
               <div className="p-5">
@@ -169,7 +169,7 @@ const Stores = () => {
                         {store.name}
                       </dt>
                       <dd className="flex items-baseline">
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-foreground">
                           {store.address}
                         </div>
                       </dd>
@@ -177,7 +177,7 @@ const Stores = () => {
                   </div>
                 </div>
               </div>
-              <div className="bg-gray-50 px-5 py-3">
+              <div className="bg-card px-5 py-3">
                 <div className="flex justify-end space-x-3">
                   <button
                     onClick={(e) => handleEdit(store, e)}

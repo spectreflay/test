@@ -173,14 +173,14 @@ const UserManagement = () => {
     <>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
             <Users className="h-6 w-6" />
             User Management
           </h1>
         </div>
 
         {/* Roles Section */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-card rounded-lg shadow p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-medium flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -202,7 +202,7 @@ const UserManagement = () => {
 
           <div className="grid grid-cols-1 gap-4">
             {roles?.map((role) => (
-              <div key={role._id} className="border rounded-lg p-4">
+              <div key={role._id} className="border rounded-lg p-4 border-primary">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-medium">{role.name}</h3>
@@ -250,7 +250,7 @@ const UserManagement = () => {
         </div>
 
         {/* Staff Section */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-card rounded-lg shadow p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-medium flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
@@ -267,7 +267,7 @@ const UserManagement = () => {
 
           <div className="grid grid-cols-1 gap-4">
             {staff?.map((member) => (
-              <div key={member._id} className="border rounded-lg p-4">
+              <div key={member._id} className="border border-primary rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-medium">{member.name}</h3>
@@ -374,7 +374,7 @@ const UserManagement = () => {
                         }}
                         className="rounded border-gray-300 bg-primary shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                       />
-                      <span className="ml-2 text-sm text-gray-900">
+                      <span className="ml-2 text-sm text-foreground">
                         {permission.description}
                       </span>
                     </label>
@@ -397,7 +397,7 @@ const UserManagement = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-hover"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-foreground bg-primary hover:bg-primary-hover"
                 >
                   {editingRole ? "Update" : "Create"}
                 </button>
@@ -486,7 +486,7 @@ const UserManagement = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-hover"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-foreground bg-primary hover:bg-primary-hover"
                 >
                   {editingStaff ? "Update" : "Create"}
                 </button>

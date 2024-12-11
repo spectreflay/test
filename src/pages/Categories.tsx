@@ -9,6 +9,9 @@ import {
   useUpdateCategoryMutation,
   useDeleteCategoryMutation,
 } from "../store/services/categoryService";
+import { handleOfflineAction } from "../utils/offlineStorage";
+import { networkStatus } from "../utils/networkStatus";
+import OfflineIndicator from "../components/sales/OfflineIndicator";
 
 interface CategoryForm {
   name: string;
@@ -33,34 +36,61 @@ const Categories = () => {
 
   const onSubmit = async (data: CategoryForm) => {
     try {
+      const categoryData = {
+        ...data,
+        store: storeId!,
+      };
+
       if (editingCategory) {
-        await updateCategory({
+        const updateData = {
           _id: editingCategory._id,
-          ...data,
-          store: storeId,
-        }).unwrap();
+          ...categoryData,
+        };
+
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction(
+            "category",
+            "update",
+            updateData
+          );
+          if (handled) {
+            setIsModalOpen(false);
+            reset();
+            setEditingCategory(null);
+            return;
+          }
+        }
+
+        await updateCategory(updateData).unwrap();
         toast.success("Category updated successfully");
       } else {
-        await createCategory({ ...data, store: storeId }).unwrap();
-        toast.success("Category created successfully");
+        await createCategory(categoryData).unwrap();
+        if (networkStatus.isNetworkOnline()) {
+          toast.success("Category created successfully");
+        } else {
+          toast.success("Category saved offline. Will sync when online.");
+        }
       }
       setIsModalOpen(false);
       reset();
       setEditingCategory(null);
     } catch (error) {
-      toast.error("Operation failed");
+      setIsModalOpen(false);
+      reset();
+      setEditingCategory(null);
     }
-  };
-
-  const handleEdit = (category: any) => {
-    setEditingCategory(category);
-    reset({ name: category.name, description: category.description });
-    setIsModalOpen(true);
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this category?")) {
       try {
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction("category", "delete", {
+            _id: id,
+          });
+          if (handled) return;
+        }
+
         await deleteCategory(id).unwrap();
         toast.success("Category deleted successfully");
       } catch (error) {
@@ -75,7 +105,7 @@ const Categories = () => {
     <>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900">Categories</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Categories</h1>
           <button
             onClick={() => {
               setEditingCategory(null);
@@ -89,25 +119,25 @@ const Categories = () => {
           </button>
         </div>
 
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+        <div className="bg-card shadow-md rounded-lg overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-card">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-sm font-medium text-primary uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-sm font-medium text-primary uppercase tracking-wider">
                   Description
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-sm font-medium text-primary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-gray-200">
               {categories?.map((category) => (
                 <tr key={category._id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
                     {category.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -115,8 +145,15 @@ const Categories = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
-                      onClick={() => handleEdit(category)}
-                      className="text-primary hover:text-primary-hover mr-4"
+                      onClick={() => {
+                        setEditingCategory(category);
+                        reset({
+                          name: category.name,
+                          description: category.description,
+                        });
+                        setIsModalOpen(true);
+                      }}
+                      className="text-gray-500 hover:text-primary-hover mr-4"
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
@@ -133,6 +170,7 @@ const Categories = () => {
           </table>
         </div>
       </div>
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -190,6 +228,8 @@ const Categories = () => {
           </div>
         </div>
       )}
+
+      <OfflineIndicator />
     </>
   );
 };

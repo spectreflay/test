@@ -16,7 +16,7 @@ const DateRangePicker = ({
   return (
     <div className="flex gap-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700">Start Date</label>
+        <label className="block text-sm font-medium text-500">Start Date</label>
         <input
           type="date"
           value={startDate}
@@ -25,7 +25,7 @@ const DateRangePicker = ({
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700">End Date</label>
+        <label className="block text-sm font-medium text-500">End Date</label>
         <input
           type="date"
           value={endDate}

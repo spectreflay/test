@@ -18,7 +18,7 @@ const ReportFilters: React.FC<ReportFiltersProps> = ({
   onExport,
 }) => {
   return (
-    <div className="bg-white p-4 rounded-lg shadow flex flex-col sm:flex-row justify-between items-center gap-4">
+    <div className="bg-card p-4 rounded-lg shadow flex flex-col sm:flex-row justify-between items-center gap-4">
       <DateRangePicker
         startDate={startDate}
         endDate={endDate}

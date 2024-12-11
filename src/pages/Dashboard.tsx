@@ -9,7 +9,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+      <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
       <DashboardMetrics store={store} storeId={storeId!} />
     </div>
   );
