@@ -16,7 +16,6 @@ import UpgradeModal from "../components/subscription/UpgradeModal";
 import { handleOfflineAction } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
 import OfflineIndicator from "../components/sales/OfflineIndicator";
-import { useDispatch } from 'react-redux';
 import { getUnsynedProducts } from "../utils/indexedDB";
 
 const Products = () => {
@@ -27,9 +26,6 @@ const Products = () => {
   const [createProduct] = useCreateProductMutation();
   const [updateProduct] = useUpdateProductMutation();
   const [deleteProduct] = useDeleteProductMutation();
-
-  const dispatch = useDispatch();
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [modifiers, setModifiers] = useState<any[]>([]);
