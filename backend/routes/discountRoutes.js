@@ -46,7 +46,7 @@ router.delete('/:id', protect, async (req, res) => {
   try {
     const discount = await Discount.findById(req.params.id);
     if (discount) {
-      await discount.remove();
+      await discount.deleteOne();
       res.json({ message: 'Discount removed' });
     } else {
       res.status(404).json({ message: 'Discount not found' });

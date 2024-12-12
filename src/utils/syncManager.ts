@@ -302,8 +302,9 @@ class SyncManager {
           switch (action.action) {
             case "create":
               if (discountId.startsWith("temp_")) {
+                const { _id, ...discountDataWithoutId } = action.data;
                 const result = await store.dispatch(
-                  discountApi.endpoints.createDiscount.initiate(discountData)
+                  discountApi.endpoints.createDiscount.initiate(discountDataWithoutId)
                 );
                 if (!result.data) throw new Error("Failed to create discount");
                 
