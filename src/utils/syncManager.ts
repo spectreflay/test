@@ -55,7 +55,7 @@ class SyncManager {
     const processedIds = new Set<string>();
     const actionsMap = new Map<
       string,
-      { action: string; data: any; offlineId: string }[]
+      { action: string; data: any; offlineId: string; synced: boolean }[]
     >();
 
     // Group actions by product ID
@@ -68,6 +68,7 @@ class SyncManager {
         action: product.action,
         data: product.data,
         offlineId: product.id,
+        synced: false,
       });
     }
 
@@ -75,101 +76,90 @@ class SyncManager {
       if (processedIds.has(productId)) continue;
       processedIds.add(productId);
 
-      // Check if the product was created and deleted offline
-      const wasCreatedOffline =
-        actions[0].action === "create" && productId.startsWith("temp_");
-      const wasDeletedOffline = actions[actions.length - 1].action === "delete";
-
-      if (wasCreatedOffline && wasDeletedOffline) {
-        // Product was created and deleted offline, remove all related actions
-        for (const action of actions) {
-          await deleteOfflineProduct(action.offlineId);
-        }
-        continue; // Skip to next product
-      }
-
       try {
-        let finalAction = actions[actions.length - 1];
+        let serverProductId = productId;
+        let latestProductData = actions[actions.length - 1].data;
 
-        switch (finalAction.action) {
-          case "create":
-            if (!wasCreatedOffline) {
-              const createdProduct = await store
-                .dispatch(
-                  productApi.endpoints.createProduct.initiate(finalAction.data)
-                )
-                .unwrap();
-              store.dispatch(
-                productApi.util.updateQueryData(
-                  "getProducts",
-                  finalAction.data.store,
-                  (draft) => {
-                    const index = draft.findIndex((p) => p._id === productId);
-                    if (index !== -1) {
-                      draft[index] = createdProduct;
-                    } else {
-                      draft.push(createdProduct);
-                    }
-                  }
-                )
-              );
-            }
-            break;
-          case "update":
-            if (!wasCreatedOffline) {
-              await store
-                .dispatch(
-                  productApi.endpoints.updateProduct.initiate(finalAction.data)
-                )
-                .unwrap();
-            }
-            break;
-          case "delete":
-            if (!wasCreatedOffline) {
-              await store
-                .dispatch(
-                  productApi.endpoints.deleteProduct.initiate(productId)
-                )
-                .unwrap();
-              store.dispatch(
-                productApi.util.updateQueryData(
-                  "getProducts",
-                  finalAction.data.store,
-                  (draft) => {
-                    return draft.filter((p) => p._id !== productId);
-                  }
-                )
-              );
-            }
-            break;
-        }
-
-        // Mark all actions for this product as synced and remove them
         for (const action of actions) {
+          if (action.synced) continue;
+
+          switch (action.action) {
+            case "create":
+              if (productId.startsWith("temp_")) {
+                // Remove _id from productData to let the server generate it
+                const { _id, ...productDataWithoutId } = action.data;
+                const createdProduct = await store
+                  .dispatch(
+                    productApi.endpoints.createProduct.initiate(
+                      productDataWithoutId
+                    )
+                  )
+                  .unwrap();
+                serverProductId = createdProduct._id;
+
+                // Update local state
+                store.dispatch(
+                  productApi.util.updateQueryData(
+                    "getProducts",
+                    action.data.store,
+                    (draft) => {
+                      const index = draft.findIndex((p) => p._id === productId);
+                      if (index !== -1) {
+                        draft[index] = createdProduct;
+                      } else {
+                        draft.push(createdProduct);
+                      }
+                    }
+                  )
+                );
+              }
+              break;
+            case "update":
+              await store
+                .dispatch(
+                  productApi.endpoints.updateProduct.initiate({
+                    ...action.data,
+                    _id: serverProductId,
+                  })
+                )
+                .unwrap();
+              break;
+            case "delete":
+              await store
+                .dispatch(
+                  productApi.endpoints.deleteProduct.initiate(serverProductId)
+                )
+                .unwrap();
+              store.dispatch(
+                productApi.util.updateQueryData(
+                  "getProducts",
+                  action.data.store,
+                  (draft) => {
+                    return draft.filter((p) => p._id !== serverProductId);
+                  }
+                )
+              );
+              break;
+          }
+
+          action.synced = true;
           await markProductAsSynced(action.offlineId);
           await deleteOfflineProduct(action.offlineId);
         }
       } catch (error) {
         console.error("Failed to sync product:", error);
-        // If there's an error, we keep the offline data for future sync attempts
-        // But we still remove the 'create' action if it was followed by a 'delete'
-        if (wasCreatedOffline && wasDeletedOffline) {
-          for (const action of actions) {
-            await deleteOfflineProduct(action.offlineId);
-          }
-        }
+        // If there's an error, we keep the unsynced offline data for future sync attempts
       }
     }
 
     return unsynedProducts.length;
   }
-
   private async syncCategories() {
     const unsynedCategories = await getUnsynedCategories();
     const processedIds = new Set<string>();
     const actionsMap = new Map<
       string,
-      { action: string; data: any; offlineId: string }[]
+      { action: string; data: any; offlineId: string; synced: boolean }[]
     >();
 
     // Group actions by category ID
@@ -178,66 +168,60 @@ class SyncManager {
       if (!actionsMap.has(categoryId)) {
         actionsMap.set(categoryId, []);
       }
-      actionsMap
-        .get(categoryId)!
-        .push({
-          action: category.action,
-          data: category.data,
-          offlineId: category.id,
-        });
+      actionsMap.get(categoryId)!.push({
+        action: category.action,
+        data: category.data,
+        offlineId: category.id,
+        synced: false,
+      });
     }
 
     for (const [categoryId, actions] of actionsMap) {
       if (processedIds.has(categoryId)) continue;
       processedIds.add(categoryId);
 
-      // Check if the category was created and deleted offline
-      const wasCreatedOffline =
-        actions[0].action === "create" && categoryId.startsWith("temp_");
-      const wasDeletedOffline = actions[actions.length - 1].action === "delete";
-
-      if (wasCreatedOffline && wasDeletedOffline) {
-        // Category was created and deleted offline, remove all related actions
-        for (const action of actions) {
-          await deleteOfflineCategory(action.offlineId);
-        }
-        continue; // Skip to next category
-      }
-
       try {
-        let finalAction = actions[actions.length - 1];
         let serverCategoryId = categoryId;
+        let latestCategoryData = actions[actions.length - 1].data;
 
-        if (wasCreatedOffline) {
-          // If the category was created offline, we need to create it on the server first
-          const createdCategory = await store
-            .dispatch(
-              categoryApi.endpoints.createCategory.initiate(finalAction.data)
-            )
-            .unwrap();
-          serverCategoryId = createdCategory._id; // Use the server-generated ID for subsequent actions
+        for (const action of actions) {
+          if (action.synced) continue;
 
-          // Update the local state with the new category
-          store.dispatch(
-            categoryApi.util.updateQueryData(
-              "getCategories",
-              finalAction.data.store,
-              (draft) => {
-                draft.push(createdCategory);
+          switch (action.action) {
+            case "create":
+              if (categoryId.startsWith("temp_")) {
+                const createdCategory = await store
+                  .dispatch(
+                    categoryApi.endpoints.createCategory.initiate(action.data)
+                  )
+                  .unwrap();
+                serverCategoryId = createdCategory._id;
+
+                // Update local state
+                store.dispatch(
+                  categoryApi.util.updateQueryData(
+                    "getCategories",
+                    action.data.store,
+                    (draft) => {
+                      const index = draft.findIndex(
+                        (c) => c._id === categoryId
+                      );
+                      if (index !== -1) {
+                        draft[index] = createdCategory;
+                      } else {
+                        draft.push(createdCategory);
+                      }
+                    }
+                  )
+                );
               }
-            )
-          );
-        }
-
-        // Handle update or delete actions
-        if (!wasDeletedOffline) {
-          switch (finalAction.action) {
+              break;
             case "update":
               await store
                 .dispatch(
                   categoryApi.endpoints.updateCategory.initiate({
-                    ...finalAction.data,
-                    _id: serverCategoryId, // Use the server ID for updates
+                    ...action.data,
+                    _id: serverCategoryId,
                   })
                 )
                 .unwrap();
@@ -253,7 +237,7 @@ class SyncManager {
               store.dispatch(
                 categoryApi.util.updateQueryData(
                   "getCategories",
-                  finalAction.data.store,
+                  action.data.store,
                   (draft) => {
                     return draft.filter((c) => c._id !== serverCategoryId);
                   }
@@ -261,22 +245,14 @@ class SyncManager {
               );
               break;
           }
-        }
 
-        // Mark all actions for this category as synced and remove them
-        for (const action of actions) {
+          action.synced = true;
           await markCategoryAsSynced(action.offlineId);
           await deleteOfflineCategory(action.offlineId);
         }
       } catch (error) {
         console.error("Failed to sync category:", error);
-        // If there's an error, we keep the offline data for future sync attempts
-        // But we still remove all actions if the category was created and deleted offline
-        if (wasCreatedOffline && wasDeletedOffline) {
-          for (const action of actions) {
-            await deleteOfflineCategory(action.offlineId);
-          }
-        }
+        // If there's an error, we keep the unsynced offline data for future sync attempts
       }
     }
 

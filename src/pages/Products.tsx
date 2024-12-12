@@ -207,11 +207,12 @@ const Products = () => {
             resetForm();
             return;
           }
+        } else {
+          const { _id, ...productDataWithoutId } = productData;
+          const createdProduct = await createProduct(productDataWithoutId).unwrap();
+          setLocalProducts((prevProducts) => [...prevProducts, createdProduct]);
+          toast.success("Product created successfully");
         }
-
-        const createdProduct = await createProduct(productData).unwrap();
-        setLocalProducts((prevProducts) => [...prevProducts, createdProduct]);
-        toast.success("Product created successfully");
       }
       resetForm();
     } catch (error) {
