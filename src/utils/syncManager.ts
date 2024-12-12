@@ -64,13 +64,11 @@ class SyncManager {
       if (!actionsMap.has(productId)) {
         actionsMap.set(productId, []);
       }
-      actionsMap
-        .get(productId)!
-        .push({
-          action: product.action,
-          data: product.data,
-          offlineId: product.id,
-        });
+      actionsMap.get(productId)!.push({
+        action: product.action,
+        data: product.data,
+        offlineId: product.id,
+      });
     }
 
     for (const [productId, actions] of actionsMap) {
@@ -169,7 +167,10 @@ class SyncManager {
   private async syncCategories() {
     const unsynedCategories = await getUnsynedCategories();
     const processedIds = new Set<string>();
-    const actionsMap = new Map<string, { action: string; data: any; offlineId: string }[]>();
+    const actionsMap = new Map<
+      string,
+      { action: string; data: any; offlineId: string }[]
+    >();
 
     // Group actions by category ID
     for (const category of unsynedCategories) {
@@ -177,7 +178,13 @@ class SyncManager {
       if (!actionsMap.has(categoryId)) {
         actionsMap.set(categoryId, []);
       }
-      actionsMap.get(categoryId)!.push({ action: category.action, data: category.data, offlineId: category.id });
+      actionsMap
+        .get(categoryId)!
+        .push({
+          action: category.action,
+          data: category.data,
+          offlineId: category.id,
+        });
     }
 
     for (const [categoryId, actions] of actionsMap) {
@@ -185,7 +192,8 @@ class SyncManager {
       processedIds.add(categoryId);
 
       // Check if the category was created and deleted offline
-      const wasCreatedOffline = actions[0].action === "create" && categoryId.startsWith("temp_");
+      const wasCreatedOffline =
+        actions[0].action === "create" && categoryId.startsWith("temp_");
       const wasDeletedOffline = actions[actions.length - 1].action === "delete";
 
       if (wasCreatedOffline && wasDeletedOffline) {
@@ -198,37 +206,58 @@ class SyncManager {
 
       try {
         let finalAction = actions[actions.length - 1];
+        let serverCategoryId = categoryId;
 
-        if (!wasCreatedOffline || (wasCreatedOffline && !wasDeletedOffline)) {
+        if (wasCreatedOffline) {
+          // If the category was created offline, we need to create it on the server first
+          const createdCategory = await store
+            .dispatch(
+              categoryApi.endpoints.createCategory.initiate(finalAction.data)
+            )
+            .unwrap();
+          serverCategoryId = createdCategory._id; // Use the server-generated ID for subsequent actions
+
+          // Update the local state with the new category
+          store.dispatch(
+            categoryApi.util.updateQueryData(
+              "getCategories",
+              finalAction.data.store,
+              (draft) => {
+                draft.push(createdCategory);
+              }
+            )
+          );
+        }
+
+        // Handle update or delete actions
+        if (!wasDeletedOffline) {
           switch (finalAction.action) {
-            case "create":
-              const createdCategory = await store.dispatch(
-                categoryApi.endpoints.createCategory.initiate(finalAction.data)
-              ).unwrap();
-              store.dispatch(
-                categoryApi.util.updateQueryData("getCategories", finalAction.data.store, (draft) => {
-                  const index = draft.findIndex((c) => c._id === categoryId);
-                  if (index !== -1) {
-                    draft[index] = createdCategory;
-                  } else {
-                    draft.push(createdCategory);
-                  }
-                })
-              );
-              break;
             case "update":
-              await store.dispatch(
-                categoryApi.endpoints.updateCategory.initiate(finalAction.data)
-              ).unwrap();
+              await store
+                .dispatch(
+                  categoryApi.endpoints.updateCategory.initiate({
+                    ...finalAction.data,
+                    _id: serverCategoryId, // Use the server ID for updates
+                  })
+                )
+                .unwrap();
               break;
             case "delete":
-              await store.dispatch(
-                categoryApi.endpoints.deleteCategory.initiate(categoryId)
-              ).unwrap();
+              await store
+                .dispatch(
+                  categoryApi.endpoints.deleteCategory.initiate(
+                    serverCategoryId
+                  )
+                )
+                .unwrap();
               store.dispatch(
-                categoryApi.util.updateQueryData("getCategories", finalAction.data.store, (draft) => {
-                  return draft.filter((c) => c._id !== categoryId);
-                })
+                categoryApi.util.updateQueryData(
+                  "getCategories",
+                  finalAction.data.store,
+                  (draft) => {
+                    return draft.filter((c) => c._id !== serverCategoryId);
+                  }
+                )
               );
               break;
           }
@@ -375,4 +404,3 @@ class SyncManager {
 }
 
 export const syncManager = new SyncManager();
-

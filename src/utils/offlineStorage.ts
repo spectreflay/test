@@ -46,3 +46,32 @@ export const handleOfflineAction = async (
     return false;
   }
 };
+
+export const saveCategoriesToLocalStorage = (
+  storeId: string,
+  categories: any[]
+) => {
+  try {
+    localStorage.setItem(`categories_${storeId}`, JSON.stringify(categories));
+  } catch (error) {
+    console.error("Error saving categories to localStorage:", error);
+  }
+};
+
+export const getCategoriesFromLocalStorage = (storeId: string) => {
+  try {
+    const categories = localStorage.getItem(`categories_${storeId}`);
+    return categories ? JSON.parse(categories) : null;
+  } catch (error) {
+    console.error("Error getting categories from localStorage:", error);
+    return null;
+  }
+};
+
+export const clearCategoriesFromLocalStorage = (storeId: string) => {
+  try {
+    localStorage.removeItem(`categories_${storeId}`);
+  } catch (error) {
+    console.error("Error clearing categories from localStorage:", error);
+  }
+};

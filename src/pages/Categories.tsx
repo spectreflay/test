@@ -13,6 +13,11 @@ import { handleOfflineAction } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
 import OfflineIndicator from "../components/sales/OfflineIndicator";
 import { getUnsynedCategories } from "../utils/indexedDB";
+import {
+  saveCategoriesToLocalStorage,
+  getCategoriesFromLocalStorage,
+  clearCategoriesFromLocalStorage,
+} from "../utils/offlineStorage";
 
 interface CategoryForm {
   name: string;
@@ -21,7 +26,9 @@ interface CategoryForm {
 
 const Categories = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: categories, isLoading } = useGetCategoriesQuery(storeId!);
+  const { data: apiCategories, isLoading } = useGetCategoriesQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
   const [createCategory] = useCreateCategoryMutation();
   const [updateCategory] = useUpdateCategoryMutation();
   const [deleteCategory] = useDeleteCategoryMutation();
@@ -36,12 +43,24 @@ const Categories = () => {
     formState: { errors },
   } = useForm<CategoryForm>();
 
-  // Initialize local categories with server data
+  // Initialize categories from localStorage or API
   useEffect(() => {
-    if (categories) {
-      setLocalCategories(categories);
-    }
-  }, [categories]);
+    const initializeCategories = async () => {
+      if (networkStatus.isNetworkOnline() && apiCategories) {
+        // If online and we have API data, save to localStorage and use it
+        saveCategoriesToLocalStorage(storeId!, apiCategories);
+        setLocalCategories(apiCategories);
+      } else {
+        // If offline, try to get data from localStorage
+        const storedCategories = getCategoriesFromLocalStorage(storeId!);
+        if (storedCategories) {
+          setLocalCategories(storedCategories);
+        }
+      }
+    };
+
+    initializeCategories();
+  }, [storeId, apiCategories]);
 
   // Load offline categories
   useEffect(() => {
@@ -98,6 +117,7 @@ const Categories = () => {
                 cat._id === updateData._id ? { ...cat, ...updateData } : cat
               )
             );
+            saveCategoriesToLocalStorage(storeId!, localCategories);
             toast.success("Category updated. Will sync when online.");
             setIsModalOpen(false);
             reset();
@@ -126,7 +146,14 @@ const Categories = () => {
             newCategory
           );
           if (handled) {
-            setLocalCategories((prevCategories) => [...prevCategories, newCategory]);
+            setLocalCategories((prevCategories) => [
+              ...prevCategories,
+              newCategory,
+            ]);
+            saveCategoriesToLocalStorage(storeId!, [
+              ...localCategories,
+              newCategory,
+            ]);
             toast.success("Category created. Will sync when online.");
             setIsModalOpen(false);
             reset();
@@ -135,7 +162,14 @@ const Categories = () => {
         }
 
         const createdCategory = await createCategory(categoryData).unwrap();
-        setLocalCategories((prevCategories) => [...prevCategories, createdCategory]);
+        setLocalCategories((prevCategories) => [
+          ...prevCategories,
+          createdCategory,
+        ]);
+        saveCategoriesToLocalStorage(storeId!, [
+          ...localCategories,
+          createdCategory,
+        ]);
         toast.success("Category created successfully");
       }
       setIsModalOpen(false);
@@ -157,18 +191,22 @@ const Categories = () => {
             _id: id,
           });
           if (handled) {
-            setLocalCategories((prevCategories) =>
-              prevCategories.filter((cat) => cat._id !== id)
+            const updatedCategories = localCategories.filter(
+              (cat) => cat._id !== id
             );
+            setLocalCategories(updatedCategories);
+            saveCategoriesToLocalStorage(storeId!, updatedCategories);
             toast.success("Category deleted. Will sync when online.");
             return;
           }
         }
 
         await deleteCategory(id).unwrap();
-        setLocalCategories((prevCategories) =>
-          prevCategories.filter((cat) => cat._id !== id)
+        const updatedCategories = localCategories.filter(
+          (cat) => cat._id !== id
         );
+        setLocalCategories(updatedCategories);
+        saveCategoriesToLocalStorage(storeId!, updatedCategories);
         toast.success("Category deleted successfully");
       } catch (error) {
         toast.error("Failed to delete category");
@@ -176,7 +214,9 @@ const Categories = () => {
     }
   };
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isLoading && networkStatus.isNetworkOnline()) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <>
