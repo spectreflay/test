@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Package, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useGetCategoriesQuery } from "../store/services/categoryService";
 import {
@@ -17,10 +17,17 @@ import { handleOfflineAction } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
 import OfflineIndicator from "../components/sales/OfflineIndicator";
 import { getUnsynedProducts } from "../utils/indexedDB";
+import {
+  saveProductsToLocalStorage,
+  getProductsFromLocalStorage,
+  clearProductsFromLocalStorage,
+} from "../utils/offlineStorage";
 
 const Products = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: products, isLoading } = useGetProductsQuery(storeId!);
+  const { data: apiProducts, isLoading } = useGetProductsQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
   const { data: categories } = useGetCategoriesQuery(storeId!);
   const { data: subscription } = useGetCurrentSubscriptionQuery();
   const [createProduct] = useCreateProductMutation();
@@ -32,26 +39,45 @@ const Products = () => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [localProducts, setLocalProducts] = useState<any[]>([]);
 
+  // Initialize products from localStorage or API
   useEffect(() => {
-    if (products) {
-      setLocalProducts(products);
-    }
-  }, [products]);
+    const initializeProducts = async () => {
+      if (networkStatus.isNetworkOnline() && apiProducts) {
+        // If online and we have API data, save to localStorage and use it
+        saveProductsToLocalStorage(storeId!, apiProducts);
+        setLocalProducts(apiProducts);
+      } else {
+        // If offline, try to get data from localStorage
+        const storedProducts = getProductsFromLocalStorage(storeId!);
+        if (storedProducts) {
+          setLocalProducts(storedProducts);
+        }
+      }
+    };
 
+    initializeProducts();
+  }, [storeId, apiProducts]);
+
+  // Load offline products
   useEffect(() => {
     const fetchOfflineProducts = async () => {
       const unsynedProducts = await getUnsynedProducts();
       setLocalProducts((prevProducts) => {
         const updatedProducts = [...prevProducts];
         unsynedProducts.forEach((unsynedProduct) => {
-          const index = updatedProducts.findIndex((p) => p._id === unsynedProduct.data._id);
+          const index = updatedProducts.findIndex(
+            (p) => p._id === unsynedProduct.data._id
+          );
           if (index !== -1) {
-            if (unsynedProduct.action === 'delete') {
+            if (unsynedProduct.action === "delete") {
               updatedProducts.splice(index, 1);
             } else {
-              updatedProducts[index] = { ...updatedProducts[index], ...unsynedProduct.data };
+              updatedProducts[index] = {
+                ...updatedProducts[index],
+                ...unsynedProduct.data,
+              };
             }
-          } else if (unsynedProduct.action === 'create') {
+          } else if (unsynedProduct.action === "create") {
             updatedProducts.push(unsynedProduct.data);
           }
         });
@@ -61,7 +87,6 @@ const Products = () => {
 
     fetchOfflineProducts();
   }, []);
-
   const resetForm = () => {
     setEditingProduct(null);
     setModifiers([]);
@@ -135,7 +160,7 @@ const Products = () => {
     const canAddProduct = checkSubscriptionLimit(
       subscription,
       "maxProducts",
-      products?.length || 0
+      localProducts?.length || 0
     );
 
     if (!canAddProduct) {
@@ -143,7 +168,8 @@ const Products = () => {
       return;
     }
 
-    resetForm();
+    setEditingProduct(null);
+    setModifiers([]);
     setIsModalOpen(true);
   };
 
@@ -177,9 +203,13 @@ const Products = () => {
           );
           if (handled) {
             setLocalProducts((prevProducts) =>
-              prevProducts.map((p) => (p._id === updateData._id ? updateData : p))
+              prevProducts.map((p) =>
+                p._id === updateData._id ? { ...p, ...updateData } : p
+              )
             );
+            saveProductsToLocalStorage(storeId!, localProducts);
             toast.success("Product updated. Will sync when online.");
+            setIsModalOpen(false);
             resetForm();
             return;
           }
@@ -188,14 +218,17 @@ const Products = () => {
         await updateProduct(updateData).unwrap();
         toast.success("Product updated successfully");
       } else {
+        const tempId = `temp_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+        const newProduct = {
+          _id: tempId,
+          ...productData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
         if (!networkStatus.isNetworkOnline()) {
-          const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const newProduct = {
-            _id: tempId,
-            ...productData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
           const handled = await handleOfflineAction(
             "product",
             "create",
@@ -203,20 +236,30 @@ const Products = () => {
           );
           if (handled) {
             setLocalProducts((prevProducts) => [...prevProducts, newProduct]);
+            saveProductsToLocalStorage(storeId!, [
+              ...localProducts,
+              newProduct,
+            ]);
             toast.success("Product created. Will sync when online.");
+            setIsModalOpen(false);
             resetForm();
             return;
           }
-        } else {
-          const { _id, ...productDataWithoutId } = productData;
-          const createdProduct = await createProduct(productDataWithoutId).unwrap();
-          setLocalProducts((prevProducts) => [...prevProducts, createdProduct]);
-          toast.success("Product created successfully");
         }
+
+        const createdProduct = await createProduct(productData).unwrap();
+        setLocalProducts((prevProducts) => [...prevProducts, createdProduct]);
+        saveProductsToLocalStorage(storeId!, [
+          ...localProducts,
+          createdProduct,
+        ]);
+        toast.success("Product created successfully");
       }
+      setIsModalOpen(false);
       resetForm();
     } catch (error) {
       toast.error("Operation failed");
+      setIsModalOpen(false);
       resetForm();
     }
   };
@@ -229,20 +272,25 @@ const Products = () => {
             _id: id,
           });
           if (handled) {
-            setLocalProducts((prevProducts) => prevProducts.filter((p) => p._id !== id));
+            const updatedProducts = localProducts.filter((p) => p._id !== id);
+            setLocalProducts(updatedProducts);
+            saveProductsToLocalStorage(storeId!, updatedProducts);
             toast.success("Product deleted. Will sync when online.");
             return;
           }
         }
 
         await deleteProduct(id).unwrap();
-        setLocalProducts((prevProducts) => prevProducts.filter((p) => p._id !== id));
+        const updatedProducts = localProducts.filter((p) => p._id !== id);
+        setLocalProducts(updatedProducts);
+        saveProductsToLocalStorage(storeId!, updatedProducts);
         toast.success("Product deleted successfully");
       } catch (error) {
         toast.error("Failed to delete product");
       }
     }
   };
+
 
   if (isLoading) return <div>Loading...</div>;
 
@@ -264,7 +312,7 @@ const Products = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {localProducts.map((product) => (
+          {localProducts?.map((product) => (
             <div
               key={product._id}
               className="bg-card overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-lg transition-shadow"
@@ -325,7 +373,10 @@ const Products = () => {
               categories={categories || []}
               initialData={editingProduct}
               onSubmit={onSubmit}
-              onCancel={resetForm}
+              onCancel={() => {
+                setIsModalOpen(false);
+                resetForm();
+              }}
               modifiers={modifiers}
               onModifierChange={handleModifierChange}
               onModifierOptionChange={handleModifierOptionChange}
@@ -351,4 +402,3 @@ const Products = () => {
 };
 
 export default Products;
-
