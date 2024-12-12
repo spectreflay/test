@@ -103,3 +103,29 @@ export const clearCategoriesFromLocalStorage = (storeId: string) => {
     console.error("Error clearing categories from localStorage:", error);
   }
 };
+
+export const saveDiscountsToLocalStorage = (storeId: string, discounts: any[]) => {
+  try {
+    localStorage.setItem(`discounts_${storeId}`, JSON.stringify(discounts));
+  } catch (error) {
+    console.error("Error saving discounts to localStorage:", error);
+  }
+};
+
+export const getDiscountsFromLocalStorage = (storeId: string) => {
+  try {
+    const discounts = localStorage.getItem(`discounts_${storeId}`);
+    return discounts ? JSON.parse(discounts) : null;
+  } catch (error) {
+    console.error("Error getting discounts from localStorage:", error);
+    return null;
+  }
+};
+
+export const clearDiscountsFromLocalStorage = (storeId: string) => {
+  try {
+    localStorage.removeItem(`discounts_${storeId}`);
+  } catch (error) {
+    console.error("Error clearing discounts from localStorage:", error);
+  }
+};

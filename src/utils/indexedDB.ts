@@ -30,6 +30,16 @@ interface OfflineDB extends DBSchema {
       synced: boolean;
     };
   };
+  offlineDiscounts: {
+    key: string;
+    value: {
+      id: string;
+      action: "create" | "update" | "delete";
+      data: any;
+      createdAt: number;
+      synced: boolean;
+    };
+  };
   offlineInventory: {
     key: string;
     value: {
@@ -66,6 +76,9 @@ export const initDB = async (): Promise<IDBPDatabase<OfflineDB>> => {
       }
       if (!db.objectStoreNames.contains("offlineCategories")) {
         db.createObjectStore("offlineCategories", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("offlineDiscounts")) {
+        db.createObjectStore("offlineDiscounts", { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains("offlineInventory")) {
         db.createObjectStore("offlineInventory", { keyPath: "id" });
@@ -137,7 +150,12 @@ export const saveOfflineCategory = async (
 ) => {
   return saveOfflineData("offlineCategories", data, action);
 };
-
+export const saveOfflineDiscount = async (
+  data: any,
+  action: "create" | "update" | "delete"
+) => {
+  return saveOfflineData("offlineDiscounts", data, action);
+};
 export const saveOfflineInventory = async (
   data: any,
   action: "create" | "update"
@@ -161,6 +179,10 @@ export const getUnsynedCategories = async () => {
   return getUnsynedData("offlineCategories");
 };
 
+export const getUnsynedDiscounts = async () => {
+  return getUnsynedData("offlineDiscounts");
+};
+
 export const getUnsynedInventory = async () => {
   return getUnsynedData("offlineInventory");
 };
@@ -181,6 +203,10 @@ export const markCategoryAsSynced = async (id: string) => {
   return markAsSynced("offlineCategories", id);
 };
 
+export const markDiscountAsSynced = async (id: string) => {
+  return markAsSynced("offlineDiscounts", id);
+};
+
 export const markInventoryAsSynced = async (id: string) => {
   return markAsSynced("offlineInventory", id);
 };
@@ -199,6 +225,10 @@ export const deleteOfflineProduct = async (id: string) => {
 
 export const deleteOfflineCategory = async (id: string) => {
   return deleteOfflineData("offlineCategories", id);
+};
+
+export const deleteOfflineDiscount = async (id: string) => {
+  return deleteOfflineData("offlineDiscounts", id);
 };
 
 export const deleteOfflineInventory = async (id: string) => {

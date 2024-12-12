@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Tag, Plus, Edit2, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -9,6 +9,15 @@ import {
   useUpdateDiscountMutation,
   useDeleteDiscountMutation,
 } from "../store/services/discountService";
+import { handleOfflineAction } from "../utils/offlineStorage";
+import { networkStatus } from "../utils/networkStatus";
+import OfflineIndicator from "../components/sales/OfflineIndicator";
+import { getUnsynedDiscounts } from "../utils/indexedDB";
+import {
+  saveDiscountsToLocalStorage,
+  getDiscountsFromLocalStorage,
+  clearDiscountsFromLocalStorage,
+} from "../utils/offlineStorage";
 
 interface DiscountForm {
   name: string;
@@ -25,12 +34,15 @@ interface DiscountForm {
 
 const Discounts = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: discounts, isLoading } = useGetDiscountsQuery(storeId!);
+  const { data: apiDiscounts, isLoading } = useGetDiscountsQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
   const [createDiscount] = useCreateDiscountMutation();
   const [updateDiscount] = useUpdateDiscountMutation();
   const [deleteDiscount] = useDeleteDiscountMutation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<any>(null);
+  const [localDiscounts, setLocalDiscounts] = useState<any[]>([]);
 
   const {
     register,
@@ -39,17 +51,127 @@ const Discounts = () => {
     formState: { errors },
   } = useForm<DiscountForm>();
 
+  // Initialize discounts from localStorage or API
+  useEffect(() => {
+    const initializeDiscounts = async () => {
+      if (networkStatus.isNetworkOnline() && apiDiscounts) {
+        // If online and we have API data, save to localStorage and use it
+        saveDiscountsToLocalStorage(storeId!, apiDiscounts);
+        setLocalDiscounts(apiDiscounts);
+      } else {
+        // If offline, try to get data from localStorage
+        const storedDiscounts = getDiscountsFromLocalStorage(storeId!);
+        if (storedDiscounts) {
+          setLocalDiscounts(storedDiscounts);
+        }
+      }
+    };
+
+    initializeDiscounts();
+  }, [storeId, apiDiscounts]);
+
+  // Load offline discounts
+  useEffect(() => {
+    const fetchOfflineDiscounts = async () => {
+      const unsynedDiscounts = await getUnsynedDiscounts();
+      setLocalDiscounts((prevDiscounts) => {
+        const updatedDiscounts = [...prevDiscounts];
+        unsynedDiscounts.forEach((unsynedDiscount) => {
+          const index = updatedDiscounts.findIndex(
+            (d) => d._id === unsynedDiscount.data._id
+          );
+          if (index !== -1) {
+            if (unsynedDiscount.action === "delete") {
+              updatedDiscounts.splice(index, 1);
+            } else {
+              updatedDiscounts[index] = {
+                ...updatedDiscounts[index],
+                ...unsynedDiscount.data,
+              };
+            }
+          } else if (unsynedDiscount.action === "create") {
+            updatedDiscounts.push(unsynedDiscount.data);
+          }
+        });
+        return updatedDiscounts;
+      });
+    };
+
+    fetchOfflineDiscounts();
+  }, []);
+
   const onSubmit = async (data: DiscountForm) => {
     try {
+      const discountData = {
+        ...data,
+        store: storeId!,
+      };
+
       if (editingDiscount) {
-        await updateDiscount({
+        const updateData = {
           _id: editingDiscount._id,
-          ...data,
-          store: storeId,
-        }).unwrap();
+          ...discountData,
+        };
+
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction(
+            "discount",
+            "update",
+            updateData
+          );
+          if (handled) {
+            setLocalDiscounts((prevDiscounts) =>
+              prevDiscounts.map((disc) =>
+                disc._id === updateData._id ? { ...disc, ...updateData } : disc
+              )
+            );
+            saveDiscountsToLocalStorage(storeId!, localDiscounts);
+            toast.success("Discount updated. Will sync when online.");
+            setIsModalOpen(false);
+            reset();
+            setEditingDiscount(null);
+            return;
+          }
+        }
+
+        await updateDiscount(updateData).unwrap();
         toast.success("Discount updated successfully");
       } else {
-        await createDiscount({ ...data, store: storeId }).unwrap();
+        const tempId = `temp_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+        const newDiscount = {
+          _id: tempId,
+          ...discountData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction(
+            "discount",
+            "create",
+            newDiscount
+          );
+          if (handled) {
+            setLocalDiscounts((prevDiscounts) => [...prevDiscounts, newDiscount]);
+            saveDiscountsToLocalStorage(storeId!, [
+              ...localDiscounts,
+              newDiscount,
+            ]);
+            toast.success("Discount created. Will sync when online.");
+            setIsModalOpen(false);
+            reset();
+            return;
+          }
+        }
+
+        const createdDiscount = await createDiscount(discountData).unwrap();
+        setLocalDiscounts((prevDiscounts) => [...prevDiscounts, createdDiscount]);
+        saveDiscountsToLocalStorage(storeId!, [
+          ...localDiscounts,
+          createdDiscount,
+        ]);
         toast.success("Discount created successfully");
       }
       setIsModalOpen(false);
@@ -57,13 +179,32 @@ const Discounts = () => {
       setEditingDiscount(null);
     } catch (error) {
       toast.error("Operation failed");
+      setIsModalOpen(false);
+      reset();
+      setEditingDiscount(null);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this discount?")) {
       try {
+        if (!networkStatus.isNetworkOnline()) {
+          const handled = await handleOfflineAction("discount", "delete", {
+            _id: id,
+          });
+          if (handled) {
+            const updatedDiscounts = localDiscounts.filter((d) => d._id !== id);
+            setLocalDiscounts(updatedDiscounts);
+            saveDiscountsToLocalStorage(storeId!, updatedDiscounts);
+            toast.success("Discount deleted. Will sync when online.");
+            return;
+          }
+        }
+
         await deleteDiscount(id).unwrap();
+        const updatedDiscounts = localDiscounts.filter((d) => d._id !== id);
+        setLocalDiscounts(updatedDiscounts);
+        saveDiscountsToLocalStorage(storeId!, updatedDiscounts);
         toast.success("Discount deleted successfully");
       } catch (error) {
         toast.error("Failed to delete discount");
@@ -71,7 +212,9 @@ const Discounts = () => {
     }
   };
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isLoading && networkStatus.isNetworkOnline()) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <>
@@ -95,10 +238,10 @@ const Discounts = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {discounts?.map((discount) => (
+          {localDiscounts?.map((discount) => (
             <div
               key={discount._id}
-              className="bg-card rounded-lg shadow-md overflow-hidden"
+              className="bg-card overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-lg transition-shadow"
             >
               <div className="p-4">
                 <div className="flex justify-between items-start">
@@ -106,7 +249,7 @@ const Discounts = () => {
                     <h3 className="text-lg font-medium text-primary">
                       {discount.name}
                     </h3>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-gray-400">
                       {discount.description}
                     </p>
                   </div>
@@ -176,6 +319,7 @@ const Discounts = () => {
           ))}
         </div>
       </div>
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -333,6 +477,8 @@ const Discounts = () => {
           </div>
         </div>
       )}
+
+      <OfflineIndicator />
     </>
   );
 };

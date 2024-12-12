@@ -15,7 +15,9 @@ import {
   deleteOfflineCategory,
   deleteOfflineInventory,
   deleteOfflineReport,
-  getOfflineProductById,
+  deleteOfflineDiscount,
+  markDiscountAsSynced,
+  getUnsynedDiscounts,
 } from "./indexedDB";
 import { createNotification } from "./notification";
 import { store } from "../store";
@@ -24,6 +26,7 @@ import { productApi } from "../store/services/productService";
 import { categoryApi } from "../store/services/categoryService";
 import { inventoryApi } from "../store/services/inventoryService";
 import { toast } from "react-hot-toast";
+import { discountApi } from "../store/services/discountService";
 
 class SyncManager {
   private isSyncing: boolean = false;
@@ -259,6 +262,113 @@ class SyncManager {
     return unsynedCategories.length;
   }
 
+  private async syncDiscounts() {
+    const unsynedDiscounts = await getUnsynedDiscounts();
+    const processedIds = new Set<string>();
+    const actionsMap = new Map<
+      string,
+      { action: string; data: any; offlineId: string; synced: boolean }[]
+    >();
+
+    // Group actions by discount ID
+    for (const discount of unsynedDiscounts) {
+      const discountId = discount.data._id;
+      if (!actionsMap.has(discountId)) {
+        actionsMap.set(discountId, []);
+      }
+      actionsMap.get(discountId)!.push({
+        action: discount.action,
+        data: discount.data,
+        offlineId: discount.id,
+        synced: false,
+      });
+    }
+
+    for (const [discountId, actions] of actionsMap) {
+      if (processedIds.has(discountId)) continue;
+      processedIds.add(discountId);
+
+      try {
+        let serverDiscountId = discountId;
+        let latestDiscountData = actions[actions.length - 1].data;
+
+        for (const action of actions) {
+          if (action.synced) continue;
+
+          switch (action.action) {
+            case "create":
+              if (discountId.startsWith("temp_")) {
+                const { _id, ...discountDataWithoutId } = action.data;
+                const createdDiscount = await store
+                  .dispatch(
+                    discountApi.endpoints.createDiscount.initiate(
+                      discountDataWithoutId
+                    )
+                  )
+                  .unwrap();
+                serverDiscountId = createdDiscount._id;
+
+                // Update local state
+                store.dispatch(
+                  discountApi.util.updateQueryData(
+                    "getDiscounts",
+                    action.data.store,
+                    (draft) => {
+                      const index = draft.findIndex(
+                        (d) => d._id === discountId
+                      );
+                      if (index !== -1) {
+                        draft[index] = createdDiscount;
+                      } else {
+                        draft.push(createdDiscount);
+                      }
+                    }
+                  )
+                );
+              }
+              break;
+            case "update":
+              await store
+                .dispatch(
+                  discountApi.endpoints.updateDiscount.initiate({
+                    ...action.data,
+                    _id: serverDiscountId,
+                  })
+                )
+                .unwrap();
+              break;
+            case "delete":
+              await store
+                .dispatch(
+                  discountApi.endpoints.deleteDiscount.initiate(
+                    serverDiscountId
+                  )
+                )
+                .unwrap();
+              store.dispatch(
+                discountApi.util.updateQueryData(
+                  "getDiscounts",
+                  action.data.store,
+                  (draft) => {
+                    return draft.filter((d) => d._id !== serverDiscountId);
+                  }
+                )
+              );
+              break;
+          }
+
+          action.synced = true;
+          await markDiscountAsSynced(action.offlineId);
+          await deleteOfflineDiscount(action.offlineId);
+        }
+      } catch (error) {
+        console.error("Failed to sync discount:", error);
+      }
+    }
+
+    return unsynedDiscounts.length;
+  }
+
   private async syncInventory() {
     const unsynedInventory = await getUnsynedInventory();
     for (const inventory of unsynedInventory) {
@@ -322,12 +432,14 @@ class SyncManager {
       const [
         productsCount,
         categoriesCount,
+        discountsCount,
         inventoryCount,
         salesCount,
         reportsCount,
       ] = await Promise.all([
         this.syncProducts(),
         this.syncCategories(),
+        this.syncDiscounts(),
         this.syncInventory(),
         this.syncSales(),
         this.syncReports(),
@@ -336,6 +448,7 @@ class SyncManager {
       const syncedEntities = [
         { type: "product", count: productsCount },
         { type: "category", count: categoriesCount },
+        { type: "discount", count: discountsCount },
         { type: "inventory", count: inventoryCount },
         { type: "sale", count: salesCount },
         { type: "report", count: reportsCount },
