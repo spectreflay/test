@@ -35,18 +35,26 @@ import {
 
 const Sales = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: apiProducts, isLoading: productsLoading } = useGetProductsQuery(storeId!, {
-    skip: !networkStatus.isNetworkOnline(),
-  });
-  const { data: apiCategories, isLoading: categoriesLoading } = useGetCategoriesQuery(storeId!, {
-    skip: !networkStatus.isNetworkOnline(),
-  });
-  const { data: apiDiscounts, isLoading: discountsLoading } = useGetDiscountsQuery(storeId!, {
-    skip: !networkStatus.isNetworkOnline(),
-  });
-  const { data: apiSales, isLoading: salesLoading } = useGetSalesQuery(storeId!, {
-    skip: !networkStatus.isNetworkOnline(),
-  });
+  const { data: apiProducts, isLoading: productsLoading } = useGetProductsQuery(
+    storeId!,
+    {
+      skip: !networkStatus.isNetworkOnline(),
+    }
+  );
+  const { data: apiCategories, isLoading: categoriesLoading } =
+    useGetCategoriesQuery(storeId!, {
+      skip: !networkStatus.isNetworkOnline(),
+    });
+  const { data: apiDiscounts, isLoading: discountsLoading } =
+    useGetDiscountsQuery(storeId!, {
+      skip: !networkStatus.isNetworkOnline(),
+    });
+  const { data: apiSales, isLoading: salesLoading } = useGetSalesQuery(
+    storeId!,
+    {
+      skip: !networkStatus.isNetworkOnline(),
+    }
+  );
   const { data: store } = useGetStoreQuery(storeId!);
   const [createSale] = useCreateSaleMutation();
 
@@ -296,65 +304,70 @@ const Sales = () => {
         paymentDetails: details,
       };
 
+      let result;
       if (networkStatus.isNetworkOnline()) {
         // Online flow
-        const result = await createSale(saleData).unwrap();
+        result = await createSale(saleData).unwrap();
         setShowPaymentModal(false);
         setLastSaleData({
           ...result,
           paymentMethod: method,
           paymentDetails: details,
+          items: cart, // Include the full cart items for the receipt
         });
-        setShowReceipt(true);
-        toast.success("Payment processed successfully");
 
         // Update local storage
         const updatedSales = [...sales, result];
         saveSalesToLocalStorage(storeId!, updatedSales);
         setSales(updatedSales);
-
-        // Update product stock in local storage
-        const updatedProducts = products.map(product => {
-          const saleItem = cart.find(item => item.product._id === product._id);
-          if (saleItem) {
-            return {
-              ...product,
-              stock: product.stock - saleItem.quantity
-            };
-          }
-          return product;
-        });
-        saveProductsToLocalStorage(storeId!, updatedProducts);
-        setProducts(updatedProducts);
       } else {
         // Offline flow
-        const offlineSaleId = await saveOfflineSale(saleData);
-        setShowPaymentModal(false);
-        setLastSaleData({
+        const offlineSaleId = `temp_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+        const offlineSale = {
           ...saleData,
           _id: offlineSaleId,
           createdAt: new Date().toISOString(),
           status: "pending_sync",
-        });
-        setShowReceipt(true);
+          items: cart.map((item) => ({
+            product: {
+              _id: item.product._id,
+              name: item.product.name,
+              price: item.product.price,
+            },
+            quantity: item.quantity,
+            modifiers: item.selectedModifiers,
+            discounts: item.selectedDiscounts,
+            price: item.product.price,
+          })),
+        };
+
+        // Save to IndexedDB
+        await saveOfflineSale(saleData);
 
         // Update local storage
-        const updatedSales = [...sales, {
-          ...saleData,
-          _id: offlineSaleId,
-          createdAt: new Date().toISOString(),
-          status: "pending_sync"
-        }];
+        const updatedSales = [...sales, offlineSale];
         saveSalesToLocalStorage(storeId!, updatedSales);
         setSales(updatedSales);
 
+        setShowPaymentModal(false);
+        setLastSaleData({
+          ...offlineSale,
+          paymentMethod: method,
+          paymentDetails: details,
+          items: cart, // Include the full cart items for the receipt
+        });
+
         // Update product stock in local storage
-        const updatedProducts = products.map(product => {
-          const saleItem = cart.find(item => item.product._id === product._id);
+        const updatedProducts = products.map((product) => {
+          const saleItem = cart.find(
+            (item) => item.product._id === product._id
+          );
           if (saleItem) {
             return {
               ...product,
-              stock: product.stock - saleItem.quantity
+              stock: product.stock - saleItem.quantity,
             };
           }
           return product;
@@ -362,14 +375,18 @@ const Sales = () => {
         saveProductsToLocalStorage(storeId!, updatedProducts);
         setProducts(updatedProducts);
 
-        toast.success("Sale saved offline. Will sync when online.");
+        toast.success(
+          "Sale saved offline. Will sync when connection is restored."
+        );
       }
 
+      setShowReceipt(true);
       // Reset cart state
       setCart([]);
       setOrderDiscount(null);
     } catch (error) {
       toast.error("Failed to process payment");
+      console.error("Payment error:", error);
     }
   };
 
@@ -385,7 +402,12 @@ const Sales = () => {
     setShowCart(false);
   };
 
-  if (productsLoading || categoriesLoading || discountsLoading || salesLoading) {
+  if (
+    productsLoading ||
+    categoriesLoading ||
+    discountsLoading ||
+    salesLoading
+  ) {
     return <div>Loading...</div>;
   }
 
@@ -526,10 +548,10 @@ const Sales = () => {
 
       {showReceipt && store && lastSaleData && (
         <Receipt
-          items={cart}
-          total={calculateTotal()}
+          items={lastSaleData.items} // Use the saved cart items from lastSaleData
+          total={lastSaleData.total}
           paymentMethod={lastSaleData.paymentMethod}
-          date={new Date()}
+          date={new Date(lastSaleData.createdAt)}
           storeInfo={{
             name: store.name,
             address: store.address,
