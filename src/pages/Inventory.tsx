@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Package, History, FileDown } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -17,19 +17,42 @@ import StockMovementModal from "../components/inventory/StockMovementModal";
 import StockMovementHistory from "../components/inventory/StockMovementHistory";
 import ProductStockHistoryModal from "../components/inventory/ProductStockHistoryModal";
 import * as XLSX from "xlsx";
+import { networkStatus } from "../utils/networkStatus";
+import { handleOfflineAction } from "../utils/offlineStorage";
+import OfflineIndicator from "../components/sales/OfflineIndicator";
+import {
+  getProductsFromLocalStorage,
+  saveProductsToLocalStorage,
+  getCategoriesFromLocalStorage,
+  saveCategoriesToLocalStorage,
+} from "../utils/offlineStorage";
+import { syncManager } from "../utils/syncManager";
 
 const ITEMS_PER_PAGE = 10;
 
 const Inventory = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: products = [] } = useGetProductsQuery(storeId!);
+  const { data: apiProducts, isLoading: productsLoading } = useGetProductsQuery(
+    storeId!,
+    {
+      skip: !networkStatus.isNetworkOnline(),
+    }
+  );
+  const { data: apiCategories, isLoading: categoriesLoading } =
+    useGetCategoriesQuery(storeId!, {
+      skip: !networkStatus.isNetworkOnline(),
+    });
   const { data: store } = useGetStoreQuery(storeId!);
-  const { data: categories = [] } = useGetCategoriesQuery(storeId!);
   const { data: stockMovements = [] } = useGetStockMovementsQuery(storeId!);
   const { data: stockAlerts } = useGetStockAlertsQuery(storeId!);
   const [addStockMovement] = useAddStockMovementMutation();
 
-  // State
+  // Local state for offline data
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [localStockMovements, setLocalStockMovements] = useState<any[]>([]);
+
+  // UI state
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [sortBy, setSortBy] = useState("name");
@@ -38,24 +61,49 @@ const Inventory = () => {
   const [showProductHistoryModal, setShowProductHistoryModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
-  const filteredAndSortedProducts = useMemo(() => {
+  // Initialize data from localStorage or API
+  useEffect(() => {
+    const initializeData = async () => {
+      if (networkStatus.isNetworkOnline() && apiProducts && apiCategories) {
+        // If online and we have API data, save to localStorage and use it
+        saveProductsToLocalStorage(storeId!, apiProducts);
+        saveCategoriesToLocalStorage(storeId!, apiCategories);
+        setProducts(apiProducts);
+        setCategories(apiCategories);
+      } else {
+        // If offline, try to get data from localStorage
+        const storedProducts = getProductsFromLocalStorage(storeId!);
+        const storedCategories = getCategoriesFromLocalStorage(storeId!);
+        if (storedProducts) setProducts(storedProducts);
+        if (storedCategories) setCategories(storedCategories);
+      }
+    };
+
+    initializeData();
+  }, [storeId, apiProducts, apiCategories]);
+
+  // Initialize sync when component mounts
+  useEffect(() => {
+    if (networkStatus.isNetworkOnline()) {
+      syncManager.syncOfflineData();
+    }
+  }, []);
+
+  const filteredProducts = useMemo(() => {
     let filtered = [...products];
 
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter((product) =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Apply category filter
     if (selectedCategory) {
       filtered = filtered.filter(
         (product) => product.category._id === selectedCategory
       );
     }
 
-    // Apply sorting
     const [field, direction] = sortBy.startsWith("-")
       ? [sortBy.substring(1), "desc"]
       : [sortBy, "asc"];
@@ -84,7 +132,7 @@ const Inventory = () => {
   }, [products, searchTerm, selectedCategory, sortBy]);
 
   const totalPages = Math.ceil(
-    (filteredAndSortedProducts?.length || 0) / ITEMS_PER_PAGE
+    (filteredProducts?.length || 0) / ITEMS_PER_PAGE
   );
 
   const handleEdit = (product: any) => {
@@ -107,14 +155,47 @@ const Inventory = () => {
           data.type === "out" ? -Number(data.quantity) : Number(data.quantity);
       }
 
-      await addStockMovement({
+      const movementData = {
         product: selectedProduct._id,
         type: data.type,
         quantity,
         reason: data.reason,
         store: storeId,
-      }).unwrap();
+      };
 
+      if (!networkStatus.isNetworkOnline()) {
+        // Handle offline stock movement
+        const handled = await handleOfflineAction(
+          "inventory",
+          "create",
+          movementData
+        );
+        if (handled) {
+          // Update local product stock
+          const updatedProducts = products.map((p) =>
+            p._id === selectedProduct._id
+              ? { ...p, stock: p.stock + quantity }
+              : p
+          );
+          setProducts(updatedProducts);
+          saveProductsToLocalStorage(storeId!, updatedProducts);
+
+          // Add to local stock movements
+          const newMovement = {
+            ...movementData,
+            _id: `temp_${Date.now()}`,
+            createdAt: new Date().toISOString(),
+          };
+          setLocalStockMovements([...localStockMovements, newMovement]);
+
+          toast.success("Stock movement saved offline. Will sync when online.");
+          setShowMovementModal(false);
+          setSelectedProduct(null);
+          return;
+        }
+      }
+
+      await addStockMovement(movementData).unwrap();
       toast.success("Stock movement recorded successfully");
       setShowMovementModal(false);
       setSelectedProduct(null);
@@ -126,19 +207,19 @@ const Inventory = () => {
   const handleExportToExcel = () => {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(
-      stockMovements.map((movement) => ({
+      [...stockMovements, ...localStockMovements].map((movement) => ({
         Date: new Date(movement.createdAt).toLocaleString(),
         Product:
           products.find((p) => p._id === movement.product)?.name || "Unknown",
         Type: movement.type,
         Quantity: movement.quantity,
         Reason: movement.reason,
+        Status: movement._id.startsWith("temp_") ? "Pending Sync" : "Synced",
       }))
     );
 
     XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Movements");
-
-    const currentDate = new Date().toISOString().split("T")[0]; // Get current date in YYYY-MM-DD format
+    const currentDate = new Date().toISOString().split("T")[0];
     XLSX.writeFile(workbook, `stock_movements_${currentDate}.xlsx`);
   };
 
@@ -147,80 +228,83 @@ const Inventory = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
-          <Package className="h-6 w-6" />
-          Inventory Management
-        </h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowMovementModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-hover"
-          >
-            <History className="h-4 w-4 mr-2" />
-            Record Movement
-          </button>
-          <button
-            onClick={handleExportToExcel}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-          >
-            <FileDown className="h-4 w-4 mr-2" />
-            Export to Excel
-          </button>
+    <>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
+            <Package className="h-6 w-6" />
+            Inventory Management
+          </h1>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowMovementModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-hover"
+            >
+              <History className="h-4 w-4 mr-2" />
+              Record Movement
+            </button>
+            <button
+              onClick={handleExportToExcel}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+            >
+              <FileDown className="h-4 w-4 mr-2" />
+              Export to Excel
+            </button>
+          </div>
         </div>
+
+        <InventoryFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          selectedCategory={selectedCategory}
+          categories={categories}
+          onCategoryChange={setSelectedCategory}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+        />
+
+        <InventoryList
+          products={filteredProducts}
+          storeSettings={store.settings}
+          onEdit={handleEdit}
+          onViewHistory={handleViewHistory}
+          currentPage={currentPage}
+          itemsPerPage={ITEMS_PER_PAGE}
+          categories={categories}
+        />
+
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
+
+        <StockMovementHistory movements={stockMovements} />
+
+        {showMovementModal && selectedProduct && (
+          <StockMovementModal
+            product={selectedProduct}
+            onClose={() => {
+              setShowMovementModal(false);
+              setSelectedProduct(null);
+            }}
+            onSubmit={handleStockMovement}
+          />
+        )}
+
+        {showProductHistoryModal && selectedProduct && (
+          <ProductStockHistoryModal
+            product={selectedProduct}
+            stockMovements={stockMovements}
+            onClose={() => {
+              setShowProductHistoryModal(false);
+              setSelectedProduct(null);
+            }}
+          />
+        )}
       </div>
-
-      <InventoryFilters
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        selectedCategory={selectedCategory}
-        categories={categories}
-        onCategoryChange={setSelectedCategory}
-        sortBy={sortBy}
-        onSortChange={setSortBy}
-      />
-
-      <InventoryList
-        products={filteredAndSortedProducts}
-        storeSettings={store.settings}
-        onEdit={handleEdit}
-        onViewHistory={handleViewHistory}
-        currentPage={currentPage}
-        itemsPerPage={ITEMS_PER_PAGE}
-        categories={categories}
-      />
-
-      <Pagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-      />
-
-      <StockMovementHistory movements={stockMovements} />
-
-      {showMovementModal && selectedProduct && (
-        <StockMovementModal
-          product={selectedProduct}
-          onClose={() => {
-            setShowMovementModal(false);
-            setSelectedProduct(null);
-          }}
-          onSubmit={handleStockMovement}
-        />
-      )}
-
-      {showProductHistoryModal && selectedProduct && (
-        <ProductStockHistoryModal
-          product={selectedProduct}
-          stockMovements={stockMovements}
-          onClose={() => {
-            setShowProductHistoryModal(false);
-            setSelectedProduct(null);
-          }}
-        />
-      )}
-    </div>
+      <OfflineIndicator />
+    </>
   );
 };
 
