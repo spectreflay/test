@@ -264,109 +264,84 @@ class SyncManager {
 
   private async syncDiscounts() {
     const unsynedDiscounts = await getUnsynedDiscounts();
-    const processedIds = new Set<string>();
-    const actionsMap = new Map<
-      string,
-      { action: string; data: any; offlineId: string; synced: boolean }[]
-    >();
-
-    // Group actions by discount ID
+    let syncedCount = 0;
+  
     for (const discount of unsynedDiscounts) {
-      const discountId = discount.data._id;
-      if (!actionsMap.has(discountId)) {
-        actionsMap.set(discountId, []);
-      }
-      actionsMap.get(discountId)!.push({
-        action: discount.action,
-        data: discount.data,
-        offlineId: discount.id,
-        synced: false,
-      });
-    }
-
-    for (const [discountId, actions] of actionsMap) {
-      if (processedIds.has(discountId)) continue;
-      processedIds.add(discountId);
-
       try {
-        let serverDiscountId = discountId;
-        let latestDiscountData = actions[actions.length - 1].data;
-
-        for (const action of actions) {
-          if (action.synced) continue;
-
-          switch (action.action) {
-            case "create":
-              if (discountId.startsWith("temp_")) {
-                const { _id, ...discountDataWithoutId } = action.data;
-                const createdDiscount = await store
-                  .dispatch(
-                    discountApi.endpoints.createDiscount.initiate(
-                      discountDataWithoutId
-                    )
-                  )
-                  .unwrap();
-                serverDiscountId = createdDiscount._id;
-
-                // Update local state
-                store.dispatch(
-                  discountApi.util.updateQueryData(
-                    "getDiscounts",
-                    action.data.store,
-                    (draft) => {
-                      const index = draft.findIndex(
-                        (d) => d._id === discountId
-                      );
-                      if (index !== -1) {
-                        draft[index] = createdDiscount;
-                      } else {
-                        draft.push(createdDiscount);
-                      }
-                    }
-                  )
-                );
-              }
-              break;
-            case "update":
-              await store
-                .dispatch(
-                  discountApi.endpoints.updateDiscount.initiate({
-                    ...action.data,
-                    _id: serverDiscountId,
-                  })
-                )
-                .unwrap();
-              break;
-            case "delete":
-              await store
-                .dispatch(
-                  discountApi.endpoints.deleteDiscount.initiate(
-                    serverDiscountId
-                  )
-                )
-                .unwrap();
+        const { data, action, id: offlineId } = discount;
+        let { _id: discountId, store: storeId } = data;
+  
+        switch (action) {
+          case "create":
+            if (discountId.startsWith("temp_")) {
+              // Remove temporary ID and other unnecessary fields
+              const { _id, createdAt, updatedAt, ...discountData } = data;
+              
+              // Create new discount
+              const createdDiscount = await store.dispatch(
+                discountApi.endpoints.createDiscount.initiate(discountData)
+              ).unwrap();
+  
+              // Update local state
               store.dispatch(
                 discountApi.util.updateQueryData(
                   "getDiscounts",
-                  action.data.store,
+                  storeId,
                   (draft) => {
-                    return draft.filter((d) => d._id !== serverDiscountId);
+                    const index = draft.findIndex((d) => d._id === discountId);
+                    if (index !== -1) {
+                      draft[index] = createdDiscount;
+                    } else {
+                      draft.push(createdDiscount);
+                    }
                   }
                 )
               );
-              break;
-          }
-
-          action.synced = true;
-          await markDiscountAsSynced(action.offlineId);
-          await deleteOfflineDiscount(action.offlineId);
+  
+              // Update discountId to the newly created ID
+              discountId = createdDiscount._id;
+            }
+            break;
+  
+          case "update":
+            const { createdAt, updatedAt, ...updateData } = data;
+            await store.dispatch(
+              discountApi.endpoints.updateDiscount.initiate({
+                _id: discountId,
+                ...updateData,
+              })
+            ).unwrap();
+            break;
+  
+          case "delete":
+            await store.dispatch(
+              discountApi.endpoints.deleteDiscount.initiate(discountId)
+            ).unwrap();
+  
+            // Update local state
+            store.dispatch(
+              discountApi.util.updateQueryData(
+                "getDiscounts",
+                storeId,
+                (draft) => {
+                  return draft.filter((d) => d._id !== discountId);
+                }
+              )
+            );
+            break;
         }
+  
+        // Mark as synced and clean up
+        await markDiscountAsSynced(offlineId);
+        await deleteOfflineDiscount(offlineId);
+        syncedCount++;
       } catch (error) {
         console.error("Failed to sync discount:", error);
+        // Don't throw error, continue with next discount
       }
     }
-
-    return unsynedDiscounts.length;
+  
+    return syncedCount;
   }
 
   private async syncInventory() {
@@ -459,17 +434,18 @@ class SyncManager {
         0
       );
 
-      // Only create notifications and show toasts if there was data to sync
       if (totalSynced > 0) {
+        // Show individual entity sync notifications
         for (const entity of syncedEntities) {
           const message = `Successfully synchronized ${entity.count} ${
             entity.type
-          }${entity.count > 1 ? "s" : ""} offline items`;
+          }${entity.count > 1 ? "s" : ""}`;
           await createNotification(store.dispatch, message, "system");
           toast.success(message);
         }
 
-        const overallMessage = `Successfully synchronized ${totalSynced} total offline item${
+        // Show overall sync notification
+        const overallMessage = `Successfully synchronized ${totalSynced} total item${
           totalSynced > 1 ? "s" : ""
         }`;
         await createNotification(store.dispatch, overallMessage, "system");
