@@ -57,7 +57,7 @@ export const handleOfflineAction = async (
           ...data,
           _id: `temp_${Date.now()}`,
           createdAt: new Date().toISOString(),
-          status: 'pending_sync'
+          status: "pending_sync",
         });
         saveSalesToLocalStorage(data.store, sales);
         break;
@@ -75,9 +75,15 @@ export const handleOfflineAction = async (
 };
 
 // Products
-export const saveProductsToLocalStorage = (storeId: string, products: any[]) => {
+export const saveProductsToLocalStorage = (
+  storeId: string,
+  products: any[]
+) => {
   try {
-    localStorage.setItem(CACHE_KEYS.PRODUCTS(storeId), JSON.stringify(products));
+    localStorage.setItem(
+      CACHE_KEYS.PRODUCTS(storeId),
+      JSON.stringify(products)
+    );
   } catch (error) {
     console.error("Error saving products to localStorage:", error);
   }
@@ -94,9 +100,15 @@ export const getProductsFromLocalStorage = (storeId: string) => {
 };
 
 // Categories
-export const saveCategoriesToLocalStorage = (storeId: string, categories: any[]) => {
+export const saveCategoriesToLocalStorage = (
+  storeId: string,
+  categories: any[]
+) => {
   try {
-    localStorage.setItem(CACHE_KEYS.CATEGORIES(storeId), JSON.stringify(categories));
+    localStorage.setItem(
+      CACHE_KEYS.CATEGORIES(storeId),
+      JSON.stringify(categories)
+    );
   } catch (error) {
     console.error("Error saving categories to localStorage:", error);
   }
@@ -113,9 +125,15 @@ export const getCategoriesFromLocalStorage = (storeId: string) => {
 };
 
 // Discounts
-export const saveDiscountsToLocalStorage = (storeId: string, discounts: any[]) => {
+export const saveDiscountsToLocalStorage = (
+  storeId: string,
+  discounts: any[]
+) => {
   try {
-    localStorage.setItem(CACHE_KEYS.DISCOUNTS(storeId), JSON.stringify(discounts));
+    localStorage.setItem(
+      CACHE_KEYS.DISCOUNTS(storeId),
+      JSON.stringify(discounts)
+    );
   } catch (error) {
     console.error("Error saving discounts to localStorage:", error);
   }
@@ -180,5 +198,31 @@ export const clearSalesFromLocalStorage = (storeId: string) => {
     localStorage.removeItem(CACHE_KEYS.SALES(storeId));
   } catch (error) {
     console.error("Error clearing sales from localStorage:", error);
+  }
+};
+
+export const saveReportsToLocalStorage = (storeId: string, reports: any[]) => {
+  try {
+    localStorage.setItem(`reports_${storeId}`, JSON.stringify(reports));
+  } catch (error) {
+    console.error("Error saving reports to localStorage:", error);
+  }
+};
+
+export const getReportsFromLocalStorage = (storeId: string) => {
+  try {
+    const reports = localStorage.getItem(`reports_${storeId}`);
+    return reports ? JSON.parse(reports) : null;
+  } catch (error) {
+    console.error("Error getting reports from localStorage:", error);
+    return null;
+  }
+};
+
+export const clearReportsFromLocalStorage = (storeId: string) => {
+  try {
+    localStorage.removeItem(`reports_${storeId}`);
+  } catch (error) {
+    console.error("Error clearing reports from localStorage:", error);
   }
 };

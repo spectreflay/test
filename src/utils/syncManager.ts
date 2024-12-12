@@ -411,16 +411,38 @@ class SyncManager {
 
   private async syncReports() {
     const unsynedReports = await getUnsynedReports();
+    let syncedCount = 0;
+  
     for (const report of unsynedReports) {
       try {
-        // Store reports locally until online
+        // For reports, we'll just generate and download the Excel file
+        // since reports are typically generated on-demand
+        const wb = utils.book_new();
+        const ws = utils.json_to_sheet(report.data.data);
+        utils.book_append_sheet(wb, ws, "Sales Report");
+        
+        writeFile(
+          wb,
+          `sales-report-${report.data.startDate}-to-${report.data.endDate}.xlsx`
+        );
+  
         await markReportAsSynced(report.id);
         await deleteOfflineReport(report.id);
+        syncedCount++;
+  
+        // Create a notification about the synced report
+        await createNotification(
+          store.dispatch,
+          `Sales report for ${report.data.startDate} to ${report.data.endDate} has been generated`,
+          "system"
+        );
       } catch (error) {
         console.error("Failed to sync report:", error);
+        // Continue with next report
       }
     }
-    return unsynedReports.length;
+  
+    return syncedCount;
   }
 
   public async syncOfflineData() {

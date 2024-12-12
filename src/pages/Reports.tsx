@@ -1,13 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { BarChart2 } from "lucide-react";
-import {
-  format,
-  parseISO,
-  startOfDay,
-  endOfDay,
-  isWithinInterval,
-} from "date-fns";
+import { format, parseISO, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { utils, writeFile } from "xlsx";
 import { useGetSalesQuery } from "../store/services/saleService";
 import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionService";
@@ -17,81 +11,82 @@ import SalesMetrics from "../components/reports/SalesMetrics";
 import SalesTable from "../components/reports/SalesTable";
 import TopProducts from "../components/reports/TopProducts";
 import UpgradeModal from "../components/subscription/UpgradeModal";
+import { networkStatus } from "../utils/networkStatus";
+import { handleOfflineAction } from "../utils/offlineStorage";
+import OfflineIndicator from "../components/sales/OfflineIndicator";
+import {
+  getSalesFromLocalStorage,
+  saveSalesToLocalStorage,
+} from "../utils/offlineStorage";
+import { syncManager } from "../utils/syncManager";
+import { calculateSalesMetrics, generateDailySalesData } from "../utils/report";
 
 const Reports = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: sales } = useGetSalesQuery(storeId!);
+  const { data: apiSales } = useGetSalesQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
   const { data: subscription } = useGetCurrentSubscriptionQuery();
   const [startDate, setStartDate] = useState(
     format(new Date().setDate(new Date().getDate() - 30), "yyyy-MM-dd")
   );
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [localSales, setLocalSales] = useState<any[]>([]);
 
   const isFreeTier = subscription?.subscription.name === "free";
 
-  const filteredSales = useMemo(() => {
-    if (!sales) return [];
+  // Initialize sales from localStorage or API
+  useEffect(() => {
+    const initializeSales = async () => {
+      if (networkStatus.isNetworkOnline() && apiSales) {
+        // If online and we have API data, save to localStorage and use it
+        saveSalesToLocalStorage(storeId!, apiSales);
+        setLocalSales(apiSales);
+      } else {
+        // If offline, try to get data from localStorage
+        const storedSales = getSalesFromLocalStorage(storeId!);
+        if (storedSales) {
+          setLocalSales(storedSales);
+        }
+      }
+    };
 
-    return sales.filter((sale) => {
+    initializeSales();
+  }, [storeId, apiSales]);
+
+  // Initialize sync when component mounts
+  useEffect(() => {
+    if (networkStatus.isNetworkOnline()) {
+      syncManager.syncOfflineData();
+    }
+  }, []);
+
+  const filteredSales = useMemo(() => {
+    if (!localSales) return [];
+
+    return localSales.filter((sale) => {
       const saleDate = parseISO(sale.createdAt);
       return isWithinInterval(saleDate, {
         start: startOfDay(parseISO(startDate)),
         end: endOfDay(parseISO(endDate)),
       });
     });
-  }, [sales, startDate, endDate]);
+  }, [localSales, startDate, endDate]);
 
   const metrics = useMemo(() => {
-    const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalOrders = filteredSales.length;
-    const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-
-    return {
-      totalSales,
-      totalOrders,
-      averageOrderValue,
-    };
+    return calculateSalesMetrics(filteredSales);
   }, [filteredSales]);
 
   const chartData = useMemo(() => {
-    const dailySales = filteredSales.reduce((acc: any, sale) => {
-      const date = format(parseISO(sale.createdAt), "MMM dd");
-      acc[date] = (acc[date] || 0) + sale.total;
-      return acc;
-    }, {});
+    return generateDailySalesData(
+      filteredSales,
+      parseISO(startDate),
+      parseISO(endDate)
+    );
+  }, [filteredSales, startDate, endDate]);
 
-    return Object.entries(dailySales).map(([name, sales]) => ({
-      name,
-      sales,
-    }));
-  }, [filteredSales]);
-
-  const topProducts = useMemo(() => {
-    const productMap = new Map();
-
-    filteredSales.forEach((sale) => {
-      sale.items.forEach((item) => {
-        if (!item.product) return;
-
-        const existing = productMap.get(item.product._id) || {
-          name: item.product.name,
-          quantity: 0,
-          revenue: 0,
-        };
-
-        existing.quantity += item.quantity;
-        existing.revenue += item.quantity * item.price;
-        productMap.set(item.product._id, existing);
-      });
-    });
-
-    return Array.from(productMap.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-  }, [filteredSales]);
-
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (isFreeTier) {
       setShowUpgradeModal(true);
       return;
@@ -111,6 +106,20 @@ const Reports = () => {
     const ws = utils.json_to_sheet(data);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "Sales Report");
+
+    // Save report data offline if we're not online
+    if (!networkStatus.isNetworkOnline()) {
+      const reportData = {
+        startDate,
+        endDate,
+        data,
+        exportedAt: new Date().toISOString(),
+      };
+
+      await handleOfflineAction("report", "create", reportData);
+      return;
+    }
+
     writeFile(wb, `sales-report-${startDate}-to-${endDate}.xlsx`);
   };
 
@@ -142,7 +151,7 @@ const Reports = () => {
         </div>
 
         <div className="lg:col-span-1">
-          <TopProducts products={topProducts} />
+          <TopProducts products={metrics.topProducts} />
         </div>
       </div>
 
@@ -154,6 +163,8 @@ const Reports = () => {
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
+
+      <OfflineIndicator />
     </div>
   );
 };
