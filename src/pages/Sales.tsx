@@ -9,6 +9,7 @@ import {
   useGetSalesQuery,
 } from "../store/services/saleService";
 import { useGetStoreQuery } from "../store/services/storeService";
+import { useGetDiscountsQuery } from "../store/services/discountService";
 import ProductGrid from "../components/sales/ProductGrid";
 import CategoryFilter from "../components/sales/CategoryFilter";
 import CartItem from "../components/sales/CartItem";
@@ -21,14 +22,38 @@ import { networkStatus } from "../utils/networkStatus";
 import { saveOfflineSale } from "../utils/indexedDB";
 import OfflineIndicator from "../components/sales/OfflineIndicator";
 import { syncManager } from "../utils/syncManager";
+import {
+  getProductsFromLocalStorage,
+  saveProductsToLocalStorage,
+  getCategoriesFromLocalStorage,
+  saveCategoriesToLocalStorage,
+  getDiscountsFromLocalStorage,
+  saveDiscountsToLocalStorage,
+  getSalesFromLocalStorage,
+  saveSalesToLocalStorage,
+} from "../utils/offlineStorage";
 
 const Sales = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: products } = useGetProductsQuery(storeId!);
-  const { data: categories } = useGetCategoriesQuery(storeId!);
+  const { data: apiProducts, isLoading: productsLoading } = useGetProductsQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
+  const { data: apiCategories, isLoading: categoriesLoading } = useGetCategoriesQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
+  const { data: apiDiscounts, isLoading: discountsLoading } = useGetDiscountsQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
+  const { data: apiSales, isLoading: salesLoading } = useGetSalesQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
   const { data: store } = useGetStoreQuery(storeId!);
-  const { data: sales } = useGetSalesQuery(storeId!);
   const [createSale] = useCreateSaleMutation();
+
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [discounts, setDiscounts] = useState<any[]>([]);
+  const [sales, setSales] = useState<any[]>([]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItemType[]>([]);
@@ -40,6 +65,57 @@ const Sales = () => {
   const [lastSaleData, setLastSaleData] = useState<any>(null);
   const [orderDiscount, setOrderDiscount] = useState<any>(null);
   const [showCart, setShowCart] = useState(false);
+
+  // Initialize data from localStorage or API
+  useEffect(() => {
+    const initializeData = async () => {
+      // Products
+      if (networkStatus.isNetworkOnline() && apiProducts) {
+        saveProductsToLocalStorage(storeId!, apiProducts);
+        setProducts(apiProducts);
+      } else {
+        const storedProducts = getProductsFromLocalStorage(storeId!);
+        if (storedProducts) {
+          setProducts(storedProducts);
+        }
+      }
+
+      // Categories
+      if (networkStatus.isNetworkOnline() && apiCategories) {
+        saveCategoriesToLocalStorage(storeId!, apiCategories);
+        setCategories(apiCategories);
+      } else {
+        const storedCategories = getCategoriesFromLocalStorage(storeId!);
+        if (storedCategories) {
+          setCategories(storedCategories);
+        }
+      }
+
+      // Discounts
+      if (networkStatus.isNetworkOnline() && apiDiscounts) {
+        saveDiscountsToLocalStorage(storeId!, apiDiscounts);
+        setDiscounts(apiDiscounts);
+      } else {
+        const storedDiscounts = getDiscountsFromLocalStorage(storeId!);
+        if (storedDiscounts) {
+          setDiscounts(storedDiscounts);
+        }
+      }
+
+      // Sales
+      if (networkStatus.isNetworkOnline() && apiSales) {
+        saveSalesToLocalStorage(storeId!, apiSales);
+        setSales(apiSales);
+      } else {
+        const storedSales = getSalesFromLocalStorage(storeId!);
+        if (storedSales) {
+          setSales(storedSales);
+        }
+      }
+    };
+
+    initializeData();
+  }, [storeId, apiProducts, apiCategories, apiDiscounts, apiSales]);
 
   // Initialize sync when component mounts
   useEffect(() => {
@@ -231,6 +307,25 @@ const Sales = () => {
         });
         setShowReceipt(true);
         toast.success("Payment processed successfully");
+
+        // Update local storage
+        const updatedSales = [...sales, result];
+        saveSalesToLocalStorage(storeId!, updatedSales);
+        setSales(updatedSales);
+
+        // Update product stock in local storage
+        const updatedProducts = products.map(product => {
+          const saleItem = cart.find(item => item.product._id === product._id);
+          if (saleItem) {
+            return {
+              ...product,
+              stock: product.stock - saleItem.quantity
+            };
+          }
+          return product;
+        });
+        saveProductsToLocalStorage(storeId!, updatedProducts);
+        setProducts(updatedProducts);
       } else {
         // Offline flow
         const offlineSaleId = await saveOfflineSale(saleData);
@@ -242,7 +337,32 @@ const Sales = () => {
           status: "pending_sync",
         });
         setShowReceipt(true);
-        toast.success("Payment saved offline. Will sync when online.");
+
+        // Update local storage
+        const updatedSales = [...sales, {
+          ...saleData,
+          _id: offlineSaleId,
+          createdAt: new Date().toISOString(),
+          status: "pending_sync"
+        }];
+        saveSalesToLocalStorage(storeId!, updatedSales);
+        setSales(updatedSales);
+
+        // Update product stock in local storage
+        const updatedProducts = products.map(product => {
+          const saleItem = cart.find(item => item.product._id === product._id);
+          if (saleItem) {
+            return {
+              ...product,
+              stock: product.stock - saleItem.quantity
+            };
+          }
+          return product;
+        });
+        saveProductsToLocalStorage(storeId!, updatedProducts);
+        setProducts(updatedProducts);
+
+        toast.success("Sale saved offline. Will sync when online.");
       }
 
       // Reset cart state
@@ -264,6 +384,10 @@ const Sales = () => {
     setOrderDiscount(null);
     setShowCart(false);
   };
+
+  if (productsLoading || categoriesLoading || discountsLoading || salesLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-6">
