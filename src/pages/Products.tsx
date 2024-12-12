@@ -20,7 +20,10 @@ import { getUnsynedProducts } from "../utils/indexedDB";
 import {
   saveProductsToLocalStorage,
   getProductsFromLocalStorage,
-  clearProductsFromLocalStorage,
+} from "../utils/offlineStorage";
+import {
+  saveCategoriesToLocalStorage,
+  getCategoriesFromLocalStorage,
 } from "../utils/offlineStorage";
 
 const Products = () => {
@@ -28,7 +31,9 @@ const Products = () => {
   const { data: apiProducts, isLoading } = useGetProductsQuery(storeId!, {
     skip: !networkStatus.isNetworkOnline(),
   });
-  const { data: categories } = useGetCategoriesQuery(storeId!);
+  const { data: apiCategories } = useGetCategoriesQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
   const { data: subscription } = useGetCurrentSubscriptionQuery();
   const [createProduct] = useCreateProductMutation();
   const [updateProduct] = useUpdateProductMutation();
@@ -38,25 +43,32 @@ const Products = () => {
   const [modifiers, setModifiers] = useState<any[]>([]);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [localProducts, setLocalProducts] = useState<any[]>([]);
+  const [localCategories, setLocalCategories] = useState<any[]>([]);
 
-  // Initialize products from localStorage or API
+  // Initialize products and categories from localStorage or API
   useEffect(() => {
-    const initializeProducts = async () => {
-      if (networkStatus.isNetworkOnline() && apiProducts) {
+    const initializeData = async () => {
+      if (networkStatus.isNetworkOnline() && apiProducts && apiCategories) {
         // If online and we have API data, save to localStorage and use it
         saveProductsToLocalStorage(storeId!, apiProducts);
+        saveCategoriesToLocalStorage(storeId!, apiCategories);
         setLocalProducts(apiProducts);
+        setLocalCategories(apiCategories);
       } else {
         // If offline, try to get data from localStorage
         const storedProducts = getProductsFromLocalStorage(storeId!);
+        const storedCategories = getCategoriesFromLocalStorage(storeId!);
         if (storedProducts) {
           setLocalProducts(storedProducts);
+        }
+        if (storedCategories) {
+          setLocalCategories(storedCategories);
         }
       }
     };
 
-    initializeProducts();
-  }, [storeId, apiProducts]);
+    initializeData();
+  }, [storeId, apiProducts, apiCategories]);
 
   // Load offline products
   useEffect(() => {
@@ -291,7 +303,6 @@ const Products = () => {
     }
   };
 
-
   if (isLoading) return <div>Loading...</div>;
 
   return (
@@ -370,7 +381,7 @@ const Products = () => {
               {editingProduct ? "Edit Product" : "Add Product"}
             </h2>
             <ProductForm
-              categories={categories || []}
+              categories={localCategories || []}
               initialData={editingProduct}
               onSubmit={onSubmit}
               onCancel={() => {
