@@ -305,10 +305,9 @@ class SyncManager {
                 const result = await store.dispatch(
                   discountApi.endpoints.createDiscount.initiate(discountData)
                 );
-                const createdDiscount = result.data;
-                if (!createdDiscount) throw new Error("Failed to create discount");
+                if (!result.data) throw new Error("Failed to create discount");
                 
-                serverDiscountId = createdDiscount._id;
+                serverDiscountId = result.data._id;
 
                 // Update local state
                 store.dispatch(
@@ -318,9 +317,9 @@ class SyncManager {
                     (draft) => {
                       const index = draft.findIndex((d) => d._id === discountId);
                       if (index !== -1) {
-                        draft[index] = createdDiscount;
+                        draft[index] = result.data;
                       } else {
-                        draft.push(createdDiscount);
+                        draft.push(result.data);
                       }
                     }
                   )
@@ -329,18 +328,19 @@ class SyncManager {
               break;
 
             case "update":
-              await store.dispatch(
+              const updateResult = await store.dispatch(
                 discountApi.endpoints.updateDiscount.initiate({
                   _id: serverDiscountId,
                   ...discountData,
                 })
-              ).unwrap();
+              );
+              if (!updateResult.data) throw new Error("Failed to update discount");
               break;
 
             case "delete":
               await store.dispatch(
                 discountApi.endpoints.deleteDiscount.initiate(serverDiscountId)
-              ).unwrap();
+              );
 
               // Update local state
               store.dispatch(

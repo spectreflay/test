@@ -5,11 +5,18 @@ import {
   saveOfflineInventory,
   saveOfflineReport,
   saveOfflineSale,
+  saveOfflineDiscount,
 } from "./indexedDB";
 import { toast } from "react-hot-toast";
 
 export const handleOfflineAction = async (
-  entityType: "product" | "category" | "inventory" | "report" | "sale",
+  entityType:
+    | "product"
+    | "category"
+    | "inventory"
+    | "discount"
+    | "report"
+    | "sale",
   action: "create" | "update" | "delete",
   data: any
 ) => {
@@ -24,6 +31,9 @@ export const handleOfflineAction = async (
         break;
       case "category":
         await saveOfflineCategory(data, action);
+        break;
+      case "discount":
+        await saveOfflineDiscount(data, action);
         break;
       case "inventory":
         await saveOfflineInventory(data, action);
@@ -48,7 +58,10 @@ export const handleOfflineAction = async (
 };
 
 // Products localStorage functions
-export const saveProductsToLocalStorage = (storeId: string, products: any[]) => {
+export const saveProductsToLocalStorage = (
+  storeId: string,
+  products: any[]
+) => {
   try {
     localStorage.setItem(`products_${storeId}`, JSON.stringify(products));
   } catch (error) {
@@ -104,7 +117,10 @@ export const clearCategoriesFromLocalStorage = (storeId: string) => {
   }
 };
 
-export const saveDiscountsToLocalStorage = (storeId: string, discounts: any[]) => {
+export const saveDiscountsToLocalStorage = (
+  storeId: string,
+  discounts: any[]
+) => {
   try {
     localStorage.setItem(`discounts_${storeId}`, JSON.stringify(discounts));
   } catch (error) {
