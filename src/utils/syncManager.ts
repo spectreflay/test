@@ -28,6 +28,7 @@ import { inventoryApi } from "../store/services/inventoryService";
 import { toast } from "react-hot-toast";
 import { discountApi } from "../store/services/discountService";
 
+
 class SyncManager {
   private isSyncing: boolean = false;
   private syncInterval: NodeJS.Timeout | null = null;
@@ -264,83 +265,107 @@ class SyncManager {
 
   private async syncDiscounts() {
     const unsynedDiscounts = await getUnsynedDiscounts();
-    let syncedCount = 0;
-  
+    const processedIds = new Set<string>();
+    const actionsMap = new Map<
+      string,
+      { action: string; data: any; offlineId: string; synced: boolean }[]
+    >();
+
+    // Group actions by discount ID
     for (const discount of unsynedDiscounts) {
+      const discountId = discount.data._id;
+      if (!actionsMap.has(discountId)) {
+        actionsMap.set(discountId, []);
+      }
+      actionsMap.get(discountId)!.push({
+        action: discount.action,
+        data: discount.data,
+        offlineId: discount.id,
+        synced: false,
+      });
+    }
+
+    let syncedCount = 0;
+
+    for (const [discountId, actions] of actionsMap) {
+      if (processedIds.has(discountId)) continue;
+      processedIds.add(discountId);
+
       try {
-        const { data, action, id: offlineId } = discount;
-        let { _id: discountId, store: storeId } = data;
-  
-        switch (action) {
-          case "create":
-            if (discountId.startsWith("temp_")) {
-              // Remove temporary ID and other unnecessary fields
-              const { _id, createdAt, updatedAt, ...discountData } = data;
-              
-              // Create new discount
-              const createdDiscount = await store.dispatch(
-                discountApi.endpoints.createDiscount.initiate(discountData)
+        let serverDiscountId = discountId;
+
+        for (const action of actions) {
+          if (action.synced) continue;
+
+          const { _id, createdAt, updatedAt, ...discountData } = action.data;
+
+          switch (action.action) {
+            case "create":
+              if (discountId.startsWith("temp_")) {
+                const result = await store.dispatch(
+                  discountApi.endpoints.createDiscount.initiate(discountData)
+                );
+                const createdDiscount = result.data;
+                if (!createdDiscount) throw new Error("Failed to create discount");
+                
+                serverDiscountId = createdDiscount._id;
+
+                // Update local state
+                store.dispatch(
+                  discountApi.util.updateQueryData(
+                    "getDiscounts",
+                    discountData.store,
+                    (draft) => {
+                      const index = draft.findIndex((d) => d._id === discountId);
+                      if (index !== -1) {
+                        draft[index] = createdDiscount;
+                      } else {
+                        draft.push(createdDiscount);
+                      }
+                    }
+                  )
+                );
+              }
+              break;
+
+            case "update":
+              await store.dispatch(
+                discountApi.endpoints.updateDiscount.initiate({
+                  _id: serverDiscountId,
+                  ...discountData,
+                })
               ).unwrap();
-  
+              break;
+
+            case "delete":
+              await store.dispatch(
+                discountApi.endpoints.deleteDiscount.initiate(serverDiscountId)
+              ).unwrap();
+
               // Update local state
               store.dispatch(
                 discountApi.util.updateQueryData(
                   "getDiscounts",
-                  storeId,
+                  discountData.store,
                   (draft) => {
-                    const index = draft.findIndex((d) => d._id === discountId);
-                    if (index !== -1) {
-                      draft[index] = createdDiscount;
-                    } else {
-                      draft.push(createdDiscount);
-                    }
+                    return draft.filter((d) => d._id !== serverDiscountId);
                   }
                 )
               );
-  
-              // Update discountId to the newly created ID
-              discountId = createdDiscount._id;
-            }
-            break;
-  
-          case "update":
-            const { createdAt, updatedAt, ...updateData } = data;
-            await store.dispatch(
-              discountApi.endpoints.updateDiscount.initiate({
-                _id: discountId,
-                ...updateData,
-              })
-            ).unwrap();
-            break;
-  
-          case "delete":
-            await store.dispatch(
-              discountApi.endpoints.deleteDiscount.initiate(discountId)
-            ).unwrap();
-  
-            // Update local state
-            store.dispatch(
-              discountApi.util.updateQueryData(
-                "getDiscounts",
-                storeId,
-                (draft) => {
-                  return draft.filter((d) => d._id !== discountId);
-                }
-              )
-            );
-            break;
+              break;
+          }
+
+          action.synced = true;
+          await markDiscountAsSynced(action.offlineId);
+          await deleteOfflineDiscount(action.offlineId);
+          syncedCount++;
         }
-  
-        // Mark as synced and clean up
-        await markDiscountAsSynced(offlineId);
-        await deleteOfflineDiscount(offlineId);
-        syncedCount++;
       } catch (error) {
         console.error("Failed to sync discount:", error);
-        // Don't throw error, continue with next discount
+        // Continue with next discount
       }
     }
-  
+
     return syncedCount;
   }
 
