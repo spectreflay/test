@@ -31,6 +31,8 @@ import {
   saveDiscountsToLocalStorage,
   getSalesFromLocalStorage,
   saveSalesToLocalStorage,
+  getStoreFromLocalStorage,
+  saveStoreToLocalStorage,
 } from "../utils/offlineStorage";
 
 const Sales = () => {
@@ -55,13 +57,20 @@ const Sales = () => {
       skip: !networkStatus.isNetworkOnline(),
     }
   );
-  const { data: store } = useGetStoreQuery(storeId!);
+  const { data: apiStore, isLoading: storeLoading } = useGetStoreQuery(
+    storeId!,
+    {
+      skip: !networkStatus.isNetworkOnline(),
+    }
+  );
+
   const [createSale] = useCreateSaleMutation();
 
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [discounts, setDiscounts] = useState<any[]>([]);
   const [sales, setSales] = useState<any[]>([]);
+  const [store, setStore] = useState<any>(null);
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItemType[]>([]);
@@ -120,10 +129,32 @@ const Sales = () => {
           setSales(storedSales);
         }
       }
+
+      // Sales
+      if (networkStatus.isNetworkOnline() && apiSales) {
+        saveSalesToLocalStorage(storeId!, apiSales);
+        setSales(apiSales);
+      } else {
+        const storedSales = getSalesFromLocalStorage(storeId!);
+        if (storedSales) {
+          setSales(storedSales);
+        }
+      }
+
+      // Store
+      if (networkStatus.isNetworkOnline() && apiStore) {
+        saveStoreToLocalStorage(storeId!, apiStore);
+        setStore(apiStore);
+      } else {
+        const storedStore = getStoreFromLocalStorage(storeId!);
+        if (storedStore) {
+          setStore(storedStore);
+        }
+      }
     };
 
     initializeData();
-  }, [storeId, apiProducts, apiCategories, apiDiscounts, apiSales]);
+  }, [storeId, apiProducts, apiCategories, apiDiscounts, apiSales, apiStore]);
 
   // Initialize sync when component mounts
   useEffect(() => {

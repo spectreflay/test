@@ -27,6 +27,8 @@ import {
   saveCategoriesToLocalStorage,
   getStockMovementsFromLocalStorage,
   saveStockMovementsToLocalStorage,
+  getStoreFromLocalStorage,
+  saveStoreToLocalStorage,
 } from "../utils/offlineStorage";
 import { syncManager } from "../utils/syncManager";
 
@@ -34,27 +36,31 @@ const ITEMS_PER_PAGE = 10;
 
 const Inventory = () => {
   const { storeId } = useParams<{ storeId: string }>();
+  const isOnline = networkStatus.isNetworkOnline();
+
+  // Only fetch from API if online
   const { data: apiProducts, isLoading: productsLoading } = useGetProductsQuery(
     storeId!,
     {
-      skip: !networkStatus.isNetworkOnline(),
+      skip: !isOnline,
     }
   );
   const { data: apiCategories, isLoading: categoriesLoading } =
     useGetCategoriesQuery(storeId!, {
-      skip: !networkStatus.isNetworkOnline(),
+      skip: !isOnline,
     });
   const { data: apiStockMovements } = useGetStockMovementsQuery(storeId!, {
-    skip: !networkStatus.isNetworkOnline(),
+    skip: !isOnline,
   });
-  const { data: store } = useGetStoreQuery(storeId!);
-  const { data: stockAlerts } = useGetStockAlertsQuery(storeId!);
-  const [addStockMovement] = useAddStockMovementMutation();
+  const { data: apiStore } = useGetStoreQuery(storeId!, {
+    skip: !isOnline,
+  });
 
   // Local state for offline data
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [stockMovements, setStockMovements] = useState<any[]>([]);
+  const [store, setStore] = useState<any>(null);
 
   // UI state
   const [searchTerm, setSearchTerm] = useState("");
@@ -64,31 +70,52 @@ const Inventory = () => {
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showProductHistoryModal, setShowProductHistoryModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [addStockMovement] = useAddStockMovementMutation();
 
   // Initialize data from localStorage or API
   useEffect(() => {
     const initializeData = async () => {
-      if (networkStatus.isNetworkOnline() && apiProducts && apiCategories && apiStockMovements) {
+      if (isOnline) {
         // If online and we have API data, save to localStorage and use it
-        saveProductsToLocalStorage(storeId!, apiProducts);
-        saveCategoriesToLocalStorage(storeId!, apiCategories);
-        saveStockMovementsToLocalStorage(storeId!, apiStockMovements);
-        setProducts(apiProducts);
-        setCategories(apiCategories);
-        setStockMovements(apiStockMovements);
+        if (apiProducts) {
+          saveProductsToLocalStorage(storeId!, apiProducts);
+          setProducts(apiProducts);
+        }
+        if (apiCategories) {
+          saveCategoriesToLocalStorage(storeId!, apiCategories);
+          setCategories(apiCategories);
+        }
+        if (apiStockMovements) {
+          saveStockMovementsToLocalStorage(storeId!, apiStockMovements);
+          setStockMovements(apiStockMovements);
+        }
+        if (apiStore) {
+          saveStoreToLocalStorage(storeId!, apiStore);
+          setStore(apiStore);
+        }
       } else {
-        // If offline, try to get data from localStorage
+        // If offline, get data from localStorage
         const storedProducts = getProductsFromLocalStorage(storeId!);
         const storedCategories = getCategoriesFromLocalStorage(storeId!);
         const storedMovements = getStockMovementsFromLocalStorage(storeId!);
+        const storedStore = getStoreFromLocalStorage(storeId!);
+
         if (storedProducts) setProducts(storedProducts);
         if (storedCategories) setCategories(storedCategories);
         if (storedMovements) setStockMovements(storedMovements);
+        if (storedStore) setStore(storedStore);
       }
     };
 
     initializeData();
-  }, [storeId, apiProducts, apiCategories, apiStockMovements]);
+  }, [
+    storeId,
+    apiProducts,
+    apiCategories,
+    apiStockMovements,
+    apiStore,
+    isOnline,
+  ]);
 
   // Initialize sync when component mounts
   useEffect(() => {

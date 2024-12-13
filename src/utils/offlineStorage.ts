@@ -53,7 +53,7 @@ export const handleOfflineAction = async (
           ...data,
           _id: `temp_${Date.now()}`,
           createdAt: new Date().toISOString(),
-          status: 'pending_sync'
+          status: "pending_sync",
         });
         saveStockMovementsToLocalStorage(data.store, movements);
         break;
@@ -68,7 +68,7 @@ export const handleOfflineAction = async (
           ...data,
           _id: `temp_${Date.now()}`,
           createdAt: new Date().toISOString(),
-          status: 'pending_sync'
+          status: "pending_sync",
         });
         saveSalesToLocalStorage(data.store, sales);
         break;
@@ -86,9 +86,15 @@ export const handleOfflineAction = async (
 };
 
 // Products
-export const saveProductsToLocalStorage = (storeId: string, products: any[]) => {
+export const saveProductsToLocalStorage = (
+  storeId: string,
+  products: any[]
+) => {
   try {
-    localStorage.setItem(CACHE_KEYS.PRODUCTS(storeId), JSON.stringify(products));
+    localStorage.setItem(
+      CACHE_KEYS.PRODUCTS(storeId),
+      JSON.stringify(products)
+    );
   } catch (error) {
     console.error("Error saving products to localStorage:", error);
   }
@@ -105,9 +111,15 @@ export const getProductsFromLocalStorage = (storeId: string) => {
 };
 
 // Categories
-export const saveCategoriesToLocalStorage = (storeId: string, categories: any[]) => {
+export const saveCategoriesToLocalStorage = (
+  storeId: string,
+  categories: any[]
+) => {
   try {
-    localStorage.setItem(CACHE_KEYS.CATEGORIES(storeId), JSON.stringify(categories));
+    localStorage.setItem(
+      CACHE_KEYS.CATEGORIES(storeId),
+      JSON.stringify(categories)
+    );
   } catch (error) {
     console.error("Error saving categories to localStorage:", error);
   }
@@ -124,9 +136,15 @@ export const getCategoriesFromLocalStorage = (storeId: string) => {
 };
 
 // Discounts
-export const saveDiscountsToLocalStorage = (storeId: string, discounts: any[]) => {
+export const saveDiscountsToLocalStorage = (
+  storeId: string,
+  discounts: any[]
+) => {
   try {
-    localStorage.setItem(CACHE_KEYS.DISCOUNTS(storeId), JSON.stringify(discounts));
+    localStorage.setItem(
+      CACHE_KEYS.DISCOUNTS(storeId),
+      JSON.stringify(discounts)
+    );
   } catch (error) {
     console.error("Error saving discounts to localStorage:", error);
   }
@@ -143,9 +161,15 @@ export const getDiscountsFromLocalStorage = (storeId: string) => {
 };
 
 // Stock Movements
-export const saveStockMovementsToLocalStorage = (storeId: string, movements: any[]) => {
+export const saveStockMovementsToLocalStorage = (
+  storeId: string,
+  movements: any[]
+) => {
   try {
-    localStorage.setItem(CACHE_KEYS.STOCK_MOVEMENTS(storeId), JSON.stringify(movements));
+    localStorage.setItem(
+      CACHE_KEYS.STOCK_MOVEMENTS(storeId),
+      JSON.stringify(movements)
+    );
   } catch (error) {
     console.error("Error saving stock movements to localStorage:", error);
   }
@@ -180,6 +204,24 @@ export const getSalesFromLocalStorage = (storeId: string) => {
   }
 };
 
+// Store
+export const saveStoreToLocalStorage = (storeId: string, store: any) => {
+  try {
+    localStorage.setItem(`store_${storeId}`, JSON.stringify(store));
+  } catch (error) {
+    console.error("Error saving store to localStorage:", error);
+  }
+};
+
+export const getStoreFromLocalStorage = (storeId: string) => {
+  try {
+    const store = localStorage.getItem(`store_${storeId}`);
+    return store ? JSON.parse(store) : null;
+  } catch (error) {
+    console.error("Error getting store from localStorage:", error);
+    return null;
+  }
+};
 // Clear cache functions
 export const clearProductsFromLocalStorage = (storeId: string) => {
   try {
@@ -218,5 +260,13 @@ export const clearStockMovementsFromLocalStorage = (storeId: string) => {
     localStorage.removeItem(CACHE_KEYS.STOCK_MOVEMENTS(storeId));
   } catch (error) {
     console.error("Error clearing stock movements from localStorage:", error);
+  }
+};
+
+export const clearStoreFromLocalStorage = (storeId: string) => {
+  try {
+    localStorage.removeItem(`store_${storeId}`);
+  } catch (error) {
+    console.error("Error clearing store from localStorage:", error);
   }
 };
