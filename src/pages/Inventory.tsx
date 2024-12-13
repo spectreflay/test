@@ -25,6 +25,8 @@ import {
   saveProductsToLocalStorage,
   getCategoriesFromLocalStorage,
   saveCategoriesToLocalStorage,
+  getStockMovementsFromLocalStorage,
+  saveStockMovementsToLocalStorage,
 } from "../utils/offlineStorage";
 import { syncManager } from "../utils/syncManager";
 
@@ -42,15 +44,17 @@ const Inventory = () => {
     useGetCategoriesQuery(storeId!, {
       skip: !networkStatus.isNetworkOnline(),
     });
+  const { data: apiStockMovements } = useGetStockMovementsQuery(storeId!, {
+    skip: !networkStatus.isNetworkOnline(),
+  });
   const { data: store } = useGetStoreQuery(storeId!);
-  const { data: stockMovements = [] } = useGetStockMovementsQuery(storeId!);
   const { data: stockAlerts } = useGetStockAlertsQuery(storeId!);
   const [addStockMovement] = useAddStockMovementMutation();
 
   // Local state for offline data
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [localStockMovements, setLocalStockMovements] = useState<any[]>([]);
+  const [stockMovements, setStockMovements] = useState<any[]>([]);
 
   // UI state
   const [searchTerm, setSearchTerm] = useState("");
@@ -64,23 +68,27 @@ const Inventory = () => {
   // Initialize data from localStorage or API
   useEffect(() => {
     const initializeData = async () => {
-      if (networkStatus.isNetworkOnline() && apiProducts && apiCategories) {
+      if (networkStatus.isNetworkOnline() && apiProducts && apiCategories && apiStockMovements) {
         // If online and we have API data, save to localStorage and use it
         saveProductsToLocalStorage(storeId!, apiProducts);
         saveCategoriesToLocalStorage(storeId!, apiCategories);
+        saveStockMovementsToLocalStorage(storeId!, apiStockMovements);
         setProducts(apiProducts);
         setCategories(apiCategories);
+        setStockMovements(apiStockMovements);
       } else {
         // If offline, try to get data from localStorage
         const storedProducts = getProductsFromLocalStorage(storeId!);
         const storedCategories = getCategoriesFromLocalStorage(storeId!);
+        const storedMovements = getStockMovementsFromLocalStorage(storeId!);
         if (storedProducts) setProducts(storedProducts);
         if (storedCategories) setCategories(storedCategories);
+        if (storedMovements) setStockMovements(storedMovements);
       }
     };
 
     initializeData();
-  }, [storeId, apiProducts, apiCategories]);
+  }, [storeId, apiProducts, apiCategories, apiStockMovements]);
 
   // Initialize sync when component mounts
   useEffect(() => {
@@ -186,7 +194,9 @@ const Inventory = () => {
             _id: `temp_${Date.now()}`,
             createdAt: new Date().toISOString(),
           };
-          setLocalStockMovements([...localStockMovements, newMovement]);
+          const updatedMovements = [...stockMovements, newMovement];
+          setStockMovements(updatedMovements);
+          saveStockMovementsToLocalStorage(storeId!, updatedMovements);
 
           toast.success("Stock movement saved offline. Will sync when online.");
           setShowMovementModal(false);
@@ -207,7 +217,7 @@ const Inventory = () => {
   const handleExportToExcel = () => {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(
-      [...stockMovements, ...localStockMovements].map((movement) => ({
+      stockMovements.map((movement) => ({
         Date: new Date(movement.createdAt).toLocaleString(),
         Product:
           products.find((p) => p._id === movement.product)?.name || "Unknown",

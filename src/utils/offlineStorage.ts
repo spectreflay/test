@@ -15,6 +15,8 @@ const CACHE_KEYS = {
   CATEGORIES: (storeId: string) => `categories_${storeId}`,
   DISCOUNTS: (storeId: string) => `discounts_${storeId}`,
   SALES: (storeId: string) => `sales_${storeId}`,
+  INVENTORY: (storeId: string) => `inventory_${storeId}`,
+  STOCK_MOVEMENTS: (storeId: string) => `stock_movements_${storeId}`,
 };
 
 export const handleOfflineAction = async (
@@ -45,6 +47,15 @@ export const handleOfflineAction = async (
         break;
       case "inventory":
         await saveOfflineInventory(data, action);
+        // Update local storage cache for stock movements
+        const movements = getStockMovementsFromLocalStorage(data.store) || [];
+        movements.push({
+          ...data,
+          _id: `temp_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          status: 'pending_sync'
+        });
+        saveStockMovementsToLocalStorage(data.store, movements);
         break;
       case "report":
         await saveOfflineReport(data);
@@ -131,6 +142,25 @@ export const getDiscountsFromLocalStorage = (storeId: string) => {
   }
 };
 
+// Stock Movements
+export const saveStockMovementsToLocalStorage = (storeId: string, movements: any[]) => {
+  try {
+    localStorage.setItem(CACHE_KEYS.STOCK_MOVEMENTS(storeId), JSON.stringify(movements));
+  } catch (error) {
+    console.error("Error saving stock movements to localStorage:", error);
+  }
+};
+
+export const getStockMovementsFromLocalStorage = (storeId: string) => {
+  try {
+    const movements = localStorage.getItem(CACHE_KEYS.STOCK_MOVEMENTS(storeId));
+    return movements ? JSON.parse(movements) : null;
+  } catch (error) {
+    console.error("Error getting stock movements from localStorage:", error);
+    return null;
+  }
+};
+
 // Sales
 export const saveSalesToLocalStorage = (storeId: string, sales: any[]) => {
   try {
@@ -180,5 +210,13 @@ export const clearSalesFromLocalStorage = (storeId: string) => {
     localStorage.removeItem(CACHE_KEYS.SALES(storeId));
   } catch (error) {
     console.error("Error clearing sales from localStorage:", error);
+  }
+};
+
+export const clearStockMovementsFromLocalStorage = (storeId: string) => {
+  try {
+    localStorage.removeItem(CACHE_KEYS.STOCK_MOVEMENTS(storeId));
+  } catch (error) {
+    console.error("Error clearing stock movements from localStorage:", error);
   }
 };
