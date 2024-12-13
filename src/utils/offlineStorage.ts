@@ -255,6 +255,7 @@ export const clearSalesFromLocalStorage = (storeId: string) => {
   }
 };
 
+<<<<<<< HEAD
 export const clearStockMovementsFromLocalStorage = (storeId: string) => {
   try {
     localStorage.removeItem(CACHE_KEYS.STOCK_MOVEMENTS(storeId));
@@ -268,5 +269,30 @@ export const clearStoreFromLocalStorage = (storeId: string) => {
     localStorage.removeItem(`store_${storeId}`);
   } catch (error) {
     console.error("Error clearing store from localStorage:", error);
+=======
+export const saveReportsToLocalStorage = (storeId: string, reports: any[]) => {
+  try {
+    localStorage.setItem(`reports_${storeId}`, JSON.stringify(reports));
+  } catch (error) {
+    console.error("Error saving reports to localStorage:", error);
+  }
+};
+
+export const getReportsFromLocalStorage = (storeId: string) => {
+  try {
+    const reports = localStorage.getItem(`reports_${storeId}`);
+    return reports ? JSON.parse(reports) : null;
+  } catch (error) {
+    console.error("Error getting reports from localStorage:", error);
+    return null;
+  }
+};
+
+export const clearReportsFromLocalStorage = (storeId: string) => {
+  try {
+    localStorage.removeItem(`reports_${storeId}`);
+  } catch (error) {
+    console.error("Error clearing reports from localStorage:", error);
+>>>>>>> 35ab505b8f0365a21d19411ab1a98ce4147950cf
   }
 };
