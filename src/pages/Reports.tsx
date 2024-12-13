@@ -1,13 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { BarChart2 } from "lucide-react";
-import {
-  format,
-  parseISO,
-  startOfDay,
-  endOfDay,
-  isWithinInterval,
-} from "date-fns";
+import { format, parseISO, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { utils, writeFile } from "xlsx";
 import { useGetSalesQuery } from "../store/services/saleService";
 import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionService";
@@ -17,11 +11,22 @@ import SalesMetrics from "../components/reports/SalesMetrics";
 import SalesTable from "../components/reports/SalesTable";
 import TopProducts from "../components/reports/TopProducts";
 import UpgradeModal from "../components/subscription/UpgradeModal";
+import { networkStatus } from "../utils/networkStatus";
+import { getSalesFromLocalStorage } from "../utils/offlineStorage";
+import OfflineIndicator from "../components/sales/OfflineIndicator";
 
 const Reports = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: sales } = useGetSalesQuery(storeId!);
-  const { data: subscription } = useGetCurrentSubscriptionQuery();
+  const isOnline = networkStatus.isNetworkOnline();
+
+  // Only fetch from API if online
+  const { data: apiSales } = useGetSalesQuery(storeId!, {
+    skip: !isOnline,
+  });
+  const { data: subscription } = useGetCurrentSubscriptionQuery(undefined, {
+    skip: !isOnline,
+  });
+
   const [startDate, setStartDate] = useState(
     format(new Date().setDate(new Date().getDate() - 30), "yyyy-MM-dd")
   );
@@ -29,6 +34,14 @@ const Reports = () => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const isFreeTier = subscription?.subscription.name === "free";
+
+  // Get sales data from either API or local storage
+  const sales = useMemo(() => {
+    if (isOnline && apiSales) {
+      return apiSales;
+    }
+    return getSalesFromLocalStorage(storeId!) || [];
+  }, [isOnline, apiSales, storeId]);
 
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -119,7 +132,7 @@ const Reports = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
           <BarChart2 className="h-6 w-6" />
-          Reports
+          Reports {!isOnline && "(Offline Mode)"}
         </h1>
       </div>
 
@@ -154,6 +167,8 @@ const Reports = () => {
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
+
+      <OfflineIndicator />
     </div>
   );
 };
