@@ -395,18 +395,41 @@ class SyncManager {
 
   private async syncSales() {
     const unsynedSales = await getUnsynedSales();
+    let syncedCount = 0;
+
     for (const sale of unsynedSales) {
       try {
-        await store
+        const result = await store
           .dispatch(saleApi.endpoints.createSale.initiate(sale.data))
           .unwrap();
+
+        // Update the local state with the synced sale
+        store.dispatch(
+          saleApi.util.updateQueryData(
+            "getSales",
+            sale.data.store,
+            (draft) => {
+              const index = draft.findIndex((s) => s._id === sale.data._id);
+              if (index !== -1) {
+                // Replace the temporary sale with the synced one
+                draft[index] = result;
+              } else {
+                // Add the new synced sale
+                draft.push(result);
+              }
+            }
+          )
+        );
+
         await markSaleAsSynced(sale.id);
         await deleteOfflineSale(sale.id);
+        syncedCount++;
       } catch (error) {
         console.error("Failed to sync sale:", error);
       }
     }
-    return unsynedSales.length;
+
+    return syncedCount;
   }
 
   private async syncReports() {

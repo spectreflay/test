@@ -33,7 +33,7 @@ export interface Sale {
   total: number;
   paymentMethod: "cash" | "card" | "qr";
   paymentDetails: Record<string, unknown>;
-  status: "completed" | "refunded";
+  status: "completed" | "refunded" | "pending_sync";
   createdAt: string;
   updatedAt: string;
 }
@@ -80,31 +80,37 @@ export const saleApi = api.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
 
-          // Use the productApi to fetch products instead of using fetch directly
+          // Update the sales list cache
+          dispatch(
+            saleApi.util.updateQueryData("getSales", arg.store, (draft) => {
+              const index = draft.findIndex((s) => s._id === data._id);
+              if (index !== -1) {
+                draft[index] = data;
+              } else {
+                draft.push(data);
+              }
+            })
+          );
+
+          // Check stock levels after sale
           const productsResult = await dispatch(
             productApi.endpoints.getProducts.initiate(arg.store)
           );
 
           if (productsResult.data) {
-            // Check stock levels after sale
-            productsResult.data.forEach(
-              (product: { name: string; stock: number }) => {
-                if (product.stock <= 10) {
-                  createNotification(
-                    dispatch,
-                    getLowStockMessage(product.name, product.stock),
-                    "alert",
-                    arg.store
-                  );
-                }
+            productsResult.data.forEach((product) => {
+              if (product.stock <= 10) {
+                createNotification(
+                  dispatch,
+                  getLowStockMessage(product.name, product.stock),
+                  "alert",
+                  arg.store
+                );
               }
-            );
-          } else {
-            throw new Error("Failed to fetch products");
+            });
           }
         } catch (error) {
           console.error("Error in createSale:", error);
-          // Handle error if needed
         }
       },
       invalidatesTags: ["Sales", "Products", "Inventory"],
@@ -112,6 +118,13 @@ export const saleApi = api.injectEndpoints({
     getSales: builder.query<Sale[], string>({
       query: (storeId) => `sales/${storeId}`,
       providesTags: ["Sales"],
+      transformResponse: (response: Sale[]) => {
+        // Sort sales by date (newest first)
+        return [...response].sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      },
     }),
     getSaleMetrics: builder.query<
       SaleMetrics,
