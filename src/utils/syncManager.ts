@@ -68,6 +68,12 @@ class SyncManager {
           case "create":
             if (product.data._id.startsWith("temp_")) {
               const { _id, ...productData } = product.data;
+              
+              // Update category ID if it's a temporary ID
+              if (productData.category && productData.category.startsWith("temp_")) {
+                productData.category = this.idMappings.get(productData.category) || productData.category;
+              }
+
               const createdProduct = await store
                 .dispatch(
                   productApi.endpoints.createProduct.initiate(productData)
@@ -131,11 +137,15 @@ class SyncManager {
 
     for (const category of unsynedCategories) {
       try {
+        const { _id, ...categoryData } = category.data;
         const result = await store
           .dispatch(
-            categoryApi.endpoints.createCategory.initiate(category.data)
+            categoryApi.endpoints.createCategory.initiate(categoryData)
           )
           .unwrap();
+
+        // Store the mapping of temporary to server ID
+        this.idMappings.set(_id, result._id);
 
         await markCategoryAsSynced(category.id);
         await deleteOfflineCategory(category.id);
@@ -154,11 +164,23 @@ class SyncManager {
 
     for (const discount of unsynedDiscounts) {
       try {
+        const { _id, ...discountData } = discount.data;
+
+        // Update product IDs if they're temporary IDs
+        if (discountData.products) {
+          discountData.products = discountData.products.map((productId: string) => 
+            this.idMappings.get(productId) || productId
+          );
+        }
+
         const result = await store
           .dispatch(
-            discountApi.endpoints.createDiscount.initiate(discount.data)
+            discountApi.endpoints.createDiscount.initiate(discountData)
           )
           .unwrap();
+
+        // Store the mapping of temporary to server ID
+        this.idMappings.set(_id, result._id);
 
         await markDiscountAsSynced(discount.id);
         await deleteOfflineDiscount(discount.id);
@@ -204,24 +226,36 @@ class SyncManager {
 
   private async syncSales() {
     const unsynedSales = await getUnsynedSales();
-
+  
     for (const sale of unsynedSales) {
       try {
-        // Update sale items with server IDs
+        // Update sale items with server IDs for products and discounts
         const updatedItems = sale.data.items.map((item: any) => ({
           ...item,
           product: this.idMappings.get(item.product) || item.product,
+          discounts: item.discounts.map((discount: any) => ({
+            ...discount,
+            _id: this.idMappings.get(discount._id) || discount._id
+          }))
         }));
-
+  
         const saleData = {
           ...sale.data,
           items: updatedItems,
         };
-
+  
+        // If the sale has a global discount, update its ID as well
+        if (saleData.discount && saleData.discount._id) {
+          saleData.discount = {
+            ...saleData.discount,
+            _id: this.idMappings.get(saleData.discount._id) || saleData.discount._id
+          };
+        }
+  
         const result = await store
           .dispatch(saleApi.endpoints.createSale.initiate(saleData))
           .unwrap();
-
+  
         // Update local state
         store.dispatch(
           saleApi.util.updateQueryData("getSales", sale.data.store, (draft) => {
@@ -233,14 +267,14 @@ class SyncManager {
             }
           })
         );
-
+  
         await markSaleAsSynced(sale.id);
         await deleteOfflineSale(sale.id);
       } catch (error) {
         console.error("Failed to sync sale:", error);
       }
     }
-
+  
     return unsynedSales.length;
   }
 
@@ -258,7 +292,6 @@ class SyncManager {
     return unsynedReports.length;
   }
 
-  private tempToRealIdMap = new Map<string, string>();
 
   public async syncOfflineData() {
     if (this.isSyncing) return;
@@ -268,28 +301,20 @@ class SyncManager {
       this.idMappings.clear();
 
       // Sync in the correct order: categories -> products -> discounts -> inventory -> sales -> reports
-      const [
-        categoriesCount,
-        productsCount,
-        discountsCount,
-        inventoryCount,
-        salesCount,
-        reportsCount,
-      ] = await Promise.all([
-        this.syncCategories(),
-        this.syncProducts(),
-        this.syncDiscounts(),
-        this.syncInventory(),
-        this.syncSales(),
-        this.syncReports(),
-      ]);
+      const categoriesCount = await this.syncCategories();
+      const productsCount = await this.syncProducts();
+      const discountsCount = await this.syncDiscounts();
+      const inventoryCount = await this.syncInventory();
+      const salesCount = await this.syncSales();
+      const reportsCount = await this.syncReports();
 
       const totalSynced =
         categoriesCount +
         productsCount +
         discountsCount +
         inventoryCount +
-        salesCount;
+        salesCount +
+        reportsCount;
 
       if (totalSynced > 0) {
         const message = `Successfully synchronized ${totalSynced} items`;
@@ -315,3 +340,4 @@ class SyncManager {
 }
 
 export const syncManager = new SyncManager();
+
