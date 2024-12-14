@@ -1,84 +1,155 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { Sale } from "../../store/services/saleService";
+import AdvancedFilters from "./AdvanceFilters";
 
 interface SalesTableProps {
   sales: Sale[];
 }
 
+interface FilterOptions {
+  status: string[];
+  paymentMethod: string[];
+  minAmount: string;
+  maxAmount: string;
+}
+
 const SalesTable: React.FC<SalesTableProps> = ({ sales }) => {
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterOptions>({
+    status: [],
+    paymentMethod: [],
+    minAmount: "",
+    maxAmount: "",
+  });
+
   const formatDiscounts = (sale: Sale) => {
-    const allDiscounts = sale.items.flatMap(item => item.discounts || []);
+    const allDiscounts = sale.items.flatMap((item) => item.discounts || []);
     if (allDiscounts.length === 0) return "No discounts";
 
-    return allDiscounts.map(discount => (
-      `${discount.name} (${discount.type === 'percentage' ? `${discount.value}%` : `$${discount.value}`})`
-    )).join(", ");
+    return allDiscounts
+      .map((discount) =>
+        `${discount.name} (${
+          discount.type === "percentage" ? `${discount.value}%` : `$${discount.value}`
+        })`
+      )
+      .join(", ");
   };
 
+  const resetFilters = () => {
+    setFilters({
+      status: [],
+      paymentMethod: [],
+      minAmount: "",
+      maxAmount: "",
+    });
+  };
+
+  const filteredSales = useMemo(() => {
+    return sales.filter((sale) => {
+      // Status filter
+      if (filters.status.length > 0) {
+        const saleStatus = sale._id.startsWith('temp_') ? 'pending_sync' : sale.status;
+        if (!filters.status.includes(saleStatus)) {
+          return false;
+        }
+      }
+
+      // Payment method filter
+      if (
+        filters.paymentMethod.length > 0 &&
+        !filters.paymentMethod.includes(sale.paymentMethod)
+      ) {
+        return false;
+      }
+
+      // Amount range filter
+      if (filters.minAmount && sale.total < parseFloat(filters.minAmount)) {
+        return false;
+      }
+      if (filters.maxAmount && sale.total > parseFloat(filters.maxAmount)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [sales, filters]);
+
   return (
-    <div className="bg-card rounded-lg shadow overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-card">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Items
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Payment Method
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Discounts
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Total
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-card divide-y divide-gray-200">
-            {sales.map((sale) => (
-              <tr key={sale._id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                  {format(new Date(sale.createdAt), "MMM dd, yyyy HH:mm")}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {sale.items.map((item) => (
-                    <div key={item.product?._id}>
-                      {item.product?.name} x{item.quantity}
-                    </div>
-                  ))}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                  {sale.paymentMethod}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {formatDiscounts(sale)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      sale.status === "completed"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {sale.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground text-right">
-                  ${sale.total.toFixed(2)}
-                </td>
+    <div className="space-y-4">
+      <AdvancedFilters
+        filters={filters}
+        onFilterChange={setFilters}
+        onReset={resetFilters}
+        showFilters={showFilters}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+      />
+
+      <div className="bg-card rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-card">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Items
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Payment Method
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Discounts
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-card divide-y divide-gray-200">
+              {filteredSales.map((sale) => (
+                <tr key={sale._id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                    {format(new Date(sale.createdAt), "MMM dd, yyyy HH:mm")}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {sale.items.map((item) => (
+                      <div key={item.product?._id}>
+                        {item.product?.name || "Unknown"} x{item.quantity}
+                      </div>
+                    ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                    {sale.paymentMethod}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {formatDiscounts(sale)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        sale._id.startsWith('temp_')
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : sale.status === "completed"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {sale._id.startsWith('temp_') ? 'Pending Sync' : sale.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground text-right">
+                    ${sale.total.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
