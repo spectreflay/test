@@ -29,9 +29,13 @@ import { inventoryApi } from "../store/services/inventoryService";
 import { toast } from "react-hot-toast";
 import { discountApi } from "../store/services/discountService";
 
+interface IdMapping {
+  [tempId: string]: string;
+}
 class SyncManager {
   private isSyncing: boolean = false;
   private syncInterval: NodeJS.Timeout | null = null;
+  private idMappings: IdMapping = {};
 
   constructor() {
     this.setupNetworkListener();
@@ -97,10 +101,10 @@ class SyncManager {
                     )
                   )
                   .unwrap();
-
                 serverProductId = createdProduct._id;
-                // Store the mapping of temporary to real ID
-                this.tempToRealIdMap.set(productId, serverProductId);
+                
+                // Store the ID mapping
+                this.idMappings[productId] = serverProductId;
 
                 // Update local state
                 store.dispatch(
@@ -426,79 +430,63 @@ class SyncManager {
 
   private async syncSales() {
     const unsynedSales = await getUnsynedSales();
-    const processedIds = new Set<string>();
-    const actionsMap = new Map<
-      string,
-      { action: string; data: any; offlineId: string; synced: boolean }[]
-    >();
+    let syncedCount = 0;
 
-    // Group actions by sale ID
     for (const sale of unsynedSales) {
-      const saleId = sale.data._id;
-      if (!actionsMap.has(saleId)) {
-        actionsMap.set(saleId, []);
-      }
-      actionsMap.get(saleId)!.push({
-        action: sale.action,
-        data: sale.data,
-        offlineId: sale.id,
-        synced: false,
-      });
-    }
-
-    for (const [saleId, actions] of actionsMap) {
-      if (processedIds.has(saleId)) continue;
-      processedIds.add(saleId);
-
       try {
-        for (const action of actions) {
-          if (action.synced) continue;
+        // Update sale data with real product IDs
+        const updatedSaleData = {
+          ...sale.data,
+          items: sale.data.items.map((item: any) => ({
+            ...item,
+            product: this.idMappings[item.product] || item.product,
+          })),
+        };
 
-          const result = await store
-            .dispatch(saleApi.endpoints.createSale.initiate(action.data))
-            .unwrap();
+        const result = await store
+          .dispatch(saleApi.endpoints.createSale.initiate(updatedSaleData))
+          .unwrap();
 
-          // Get all active subscriptions for getSales queries
-          const subscriptions = store.getState().api.subscriptions;
-          const salesQueries = Object.entries(subscriptions)
-            .filter(([key]) => key.startsWith("getSales"))
-            .map(([key]) => {
-              const match = key.match(/getSales$$(.*?)$$/);
-              return match ? match[1] : null;
-            })
-            .filter(Boolean);
+        // Get all active subscriptions for getSales queries
+        const subscriptions = store.getState().api.subscriptions;
+        const salesQueries = Object.entries(subscriptions)
+          .filter(([key]) => key.startsWith('getSales'))
+          .map(([key]) => {
+            const match = key.match(/getSales\((.*?)\)/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean);
 
-          // Update all active getSales queries
-          salesQueries.forEach((storeId) => {
-            store.dispatch(
-              saleApi.util.updateQueryData("getSales", storeId, (draft) => {
-                const index = draft.findIndex((s) => s._id === action.data._id);
+        // Update all active getSales queries
+        salesQueries.forEach(storeId => {
+          store.dispatch(
+            saleApi.util.updateQueryData(
+              "getSales",
+              storeId,
+              (draft) => {
+                const index = draft.findIndex((s) => s._id === sale.data._id);
                 if (index !== -1) {
-                  // Replace the temporary sale with the synced one
                   draft[index] = result;
                 } else {
-                  // Add the new synced sale
-                  draft.unshift(result); // Add to beginning since sales are sorted by date
+                  draft.unshift(result);
                 }
                 return draft;
-              })
-            );
-          });
+              }
+            )
+          );
+        });
 
-          // Invalidate any cached metrics or reports
-          store.dispatch(saleApi.util.invalidateTags(["Sales"]));
+        store.dispatch(saleApi.util.invalidateTags(['Sales']));
 
-          action.synced = true;
-          await markSaleAsSynced(action.offlineId);
-          await deleteOfflineSale(action.offlineId);
-        }
+        await markSaleAsSynced(sale.id);
+        await deleteOfflineSale(sale.id);
+        syncedCount++;
       } catch (error) {
         console.error("Failed to sync sale:", error);
-        // If there's an error, we keep the unsynced offline data for future sync attempts
       }
     }
 
-    return unsynedSales.length;
+    return syncedCount;
   }
 
   private async syncReports() {
@@ -522,18 +510,20 @@ class SyncManager {
 
     try {
       this.isSyncing = true;
-      this.tempToRealIdMap.clear();
+      this.idMappings = {};
 
-      // Sync in order of dependencies
-      const categoriesCount = await this.syncCategories();
-      const productsCount = await this.syncProducts();
-      const discountsCount = await this.syncDiscounts();
-
-      // Update references in offline sales before syncing
-      await this.updateOfflineSaleReferences();
-
-      // Sync all entity types and get counts
-      const [inventoryCount, salesCount, reportsCount] = await Promise.all([
+      // Sync in the correct order: categories -> products -> discounts -> inventory -> sales -> reports
+      const [
+        categoriesCount,
+        productsCount,
+        discountsCount,
+        inventoryCount,
+        salesCount,
+        reportsCount,
+      ] = await Promise.all([
+        this.syncCategories(),
+        this.syncProducts(),
+        this.syncDiscounts(),
         this.syncInventory(),
         this.syncSales(),
         this.syncReports(),
