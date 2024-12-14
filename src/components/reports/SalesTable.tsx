@@ -34,6 +34,27 @@ const SalesTable: React.FC<SalesTableProps> = ({ sales }) => {
     return `${item.product.name || "Unnamed Product"} x${item.quantity}`;
   };
 
+  const formatDiscountInfo = (sale: Sale) => {
+    const allDiscounts = sale.items.flatMap((item) => item.discounts || []);
+    if (allDiscounts.length === 0) {
+      return "No discounts";
+    }
+
+    return (
+      <>
+        {allDiscounts.map((discount, idx) => (
+          <div key={idx} className="text-xs text-green-600">
+            {discount.name} (-
+            {discount.type === "percentage"
+              ? `${discount.value}%`
+              : `$${discount.value}`}
+            )
+          </div>
+        ))}
+      </>
+    );
+  };
+
   const resetFilters = () => {
     setFilters({
       status: [],
@@ -120,7 +141,7 @@ const SalesTable: React.FC<SalesTableProps> = ({ sales }) => {
         onToggleFilters={() => setShowFilters(!showFilters)}
       />
 
-      <div className="bg-card rounded-lg shadow overflow-hidden">
+<div className="bg-card rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-card">
@@ -130,6 +151,9 @@ const SalesTable: React.FC<SalesTableProps> = ({ sales }) => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Items
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Discounts
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Payment Method
@@ -149,18 +173,19 @@ const SalesTable: React.FC<SalesTableProps> = ({ sales }) => {
                     {format(new Date(sale.createdAt), "MMM dd, yyyy HH:mm")}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {sale.items.map((item) => (
-                      <div key={item.product?._id}>
-                        {formatProductInfo(item)}
-                      </div>
+                    {sale.items.map((item, idx) => (
+                      <div key={idx}>{formatProductInfo(item)}</div>
                     ))}
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    {formatDiscountInfo(sale)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
                     {sale.paymentMethod}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         sale.status === "completed"
                           ? "bg-green-100 text-green-800"
                           : "bg-red-100 text-red-800"
