@@ -403,23 +403,39 @@ class SyncManager {
           .dispatch(saleApi.endpoints.createSale.initiate(sale.data))
           .unwrap();
 
-        // Update the local state with the synced sale
-        store.dispatch(
-          saleApi.util.updateQueryData(
-            "getSales",
-            sale.data.store,
-            (draft) => {
-              const index = draft.findIndex((s) => s._id === sale.data._id);
-              if (index !== -1) {
-                // Replace the temporary sale with the synced one
-                draft[index] = result;
-              } else {
-                // Add the new synced sale
-                draft.push(result);
+        // Get all active subscriptions for getSales queries
+        const subscriptions = store.getState().api.subscriptions;
+        const salesQueries = Object.entries(subscriptions)
+          .filter(([key]) => key.startsWith('getSales'))
+          .map(([key]) => {
+            const match = key.match(/getSales\((.*?)\)/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean);
+
+        // Update all active getSales queries
+        salesQueries.forEach(storeId => {
+          store.dispatch(
+            saleApi.util.updateQueryData(
+              "getSales",
+              storeId,
+              (draft) => {
+                const index = draft.findIndex((s) => s._id === sale.data._id);
+                if (index !== -1) {
+                  // Replace the temporary sale with the synced one
+                  draft[index] = result;
+                } else {
+                  // Add the new synced sale
+                  draft.unshift(result); // Add to beginning since sales are sorted by date
+                }
+                return draft;
               }
-            }
-          )
-        );
+            )
+          );
+        });
+
+        // Invalidate any cached metrics or reports
+        store.dispatch(saleApi.util.invalidateTags(['Sales']));
 
         await markSaleAsSynced(sale.id);
         await deleteOfflineSale(sale.id);

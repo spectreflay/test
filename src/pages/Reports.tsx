@@ -1,7 +1,13 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { BarChart2 } from "lucide-react";
-import { format, parseISO, startOfDay, endOfDay, isWithinInterval } from "date-fns";
+import {
+  format,
+  parseISO,
+  startOfDay,
+  endOfDay,
+  isWithinInterval,
+} from "date-fns";
 import { utils, writeFile } from "xlsx";
 import { useGetSalesQuery } from "../store/services/saleService";
 import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionService";
@@ -11,7 +17,7 @@ import SalesMetrics from "../components/reports/SalesMetrics";
 import SalesTable from "../components/reports/SalesTable";
 import TopProducts from "../components/reports/TopProducts";
 import UpgradeModal from "../components/subscription/UpgradeModal";
-import { getSalesFromLocalStorage } from "../utils/offlineStorage";
+import { getSalesFromLocalStorage, saveSalesToLocalStorage } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
 import OfflineIndicator from "../components/OfflineIndicator";
 
@@ -34,6 +40,7 @@ const Reports = () => {
   useEffect(() => {
     const initializeSales = async () => {
       if (networkStatus.isNetworkOnline() && apiSales) {
+        saveSalesToLocalStorage(storeId!, apiSales)
         setSales(apiSales);
       } else {
         const storedSales = getSalesFromLocalStorage(storeId!);
@@ -170,7 +177,7 @@ const Reports = () => {
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
-       <OfflineIndicator />
+      <OfflineIndicator />
     </div>
   );
 };

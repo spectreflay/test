@@ -33,7 +33,7 @@ export interface Sale {
   total: number;
   paymentMethod: "cash" | "card" | "qr";
   paymentDetails: Record<string, unknown>;
-  status: "completed" | "refunded" | "pending_sync";
+  status: "completed" | "refunded";
   createdAt: string;
   updatedAt: string;
 }
@@ -80,17 +80,8 @@ export const saleApi = api.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
 
-          // Update the sales list cache
-          dispatch(
-            saleApi.util.updateQueryData("getSales", arg.store, (draft) => {
-              const index = draft.findIndex((s) => s._id === data._id);
-              if (index !== -1) {
-                draft[index] = data;
-              } else {
-                draft.push(data);
-              }
-            })
-          );
+          // Update the sales list cache and invalidate related queries
+          dispatch(saleApi.util.invalidateTags(['Sales']));
 
           // Check stock levels after sale
           const productsResult = await dispatch(

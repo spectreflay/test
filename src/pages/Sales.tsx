@@ -130,17 +130,6 @@ const Sales = () => {
         }
       }
 
-      // Sales
-      if (networkStatus.isNetworkOnline() && apiSales) {
-        saveSalesToLocalStorage(storeId!, apiSales);
-        setSales(apiSales);
-      } else {
-        const storedSales = getSalesFromLocalStorage(storeId!);
-        if (storedSales) {
-          setSales(storedSales);
-        }
-      }
-
       // Store
       if (networkStatus.isNetworkOnline() && apiStore) {
         saveStoreToLocalStorage(storeId!, apiStore);
@@ -360,7 +349,7 @@ const Sales = () => {
           ...saleData,
           _id: offlineSaleId,
           createdAt: new Date().toISOString(),
-          status: "pending_sync",
+          status: "completed",
           items: cart.map((item) => ({
             product: {
               _id: item.product._id,

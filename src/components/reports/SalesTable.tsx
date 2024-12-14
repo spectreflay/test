@@ -62,7 +62,7 @@ const SalesTable: React.FC<SalesTableProps> = ({ sales }) => {
       // Status filter
       if (filters.status.length > 0) {
         const saleStatus = sale._id.startsWith("temp_")
-          ? "pending_sync"
+          ? "completed"
           : sale.status;
         if (!filters.status.includes(saleStatus)) {
           return false;
@@ -161,16 +161,12 @@ const SalesTable: React.FC<SalesTableProps> = ({ sales }) => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        sale._id.startsWith("temp_")
-                          ? "bg-yellow-100 text-yellow-800"
-                          : sale.status === "completed"
+                        sale.status === "completed"
                           ? "bg-green-100 text-green-800"
                           : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {sale._id.startsWith("temp_")
-                        ? "Pending Sync"
-                        : sale.status}
+                      {sale._id.startsWith("temp_") ? "completed" : sale.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground text-right">
