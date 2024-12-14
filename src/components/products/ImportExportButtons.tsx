@@ -2,7 +2,10 @@ import React, { useRef, useState } from "react";
 import { Download, Upload, AlertTriangle } from "lucide-react";
 import { read, utils, writeFile } from "xlsx";
 import { toast } from "react-hot-toast";
-import { Product } from "../../store/services/productService";
+import {
+  Product,
+  useUpdateProductMutation,
+} from "../../store/services/productService";
 import { useCreateCategoryMutation } from "../../store/services/categoryService";
 
 interface ImportExportButtonsProps {
@@ -17,7 +20,9 @@ interface DuplicateHandlingModalProps {
     existing: Product;
     imported: any;
   }>;
-  onResolve: (resolutions: Array<{ action: 'skip' | 'update' | 'create'; product: any }>) => void;
+  onResolve: (
+    resolutions: Array<{ action: "skip" | "update" | "create"; product: any }>
+  ) => void;
   onClose: () => void;
 }
 
@@ -26,11 +31,14 @@ const DuplicateHandlingModal: React.FC<DuplicateHandlingModalProps> = ({
   onResolve,
   onClose,
 }) => {
-  const [resolutions, setResolutions] = useState<Array<{ action: 'skip' | 'update' | 'create'; product: any }>>(
-    duplicates.map(d => ({ action: 'skip', product: d.imported }))
-  );
+  const [resolutions, setResolutions] = useState<
+    Array<{ action: "skip" | "update" | "create"; product: any }>
+  >(duplicates.map((d) => ({ action: "skip", product: d.imported })));
 
-  const handleResolutionChange = (index: number, action: 'skip' | 'update' | 'create') => {
+  const handleResolutionChange = (
+    index: number,
+    action: "skip" | "update" | "create"
+  ) => {
     const newResolutions = [...resolutions];
     newResolutions[index] = { ...newResolutions[index], action };
     setResolutions(newResolutions);
@@ -48,9 +56,9 @@ const DuplicateHandlingModal: React.FC<DuplicateHandlingModalProps> = ({
           <AlertTriangle className="h-5 w-5" />
           <h2 className="text-xl font-semibold">Duplicate Products Found</h2>
         </div>
-        
+
         <p className="mb-4 text-gray-600">
-          Some products in your import file already exist in your inventory. 
+          Some products in your import file already exist in your inventory.
           Please choose how to handle each duplicate:
         </p>
 
@@ -59,7 +67,9 @@ const DuplicateHandlingModal: React.FC<DuplicateHandlingModalProps> = ({
             <div key={index} className="border rounded-lg p-4">
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <h3 className="font-medium text-gray-900">Existing Product</h3>
+                  <h3 className="font-medium text-gray-900">
+                    Existing Product
+                  </h3>
                   <div className="mt-2 text-sm text-gray-600">
                     <p>Name: {duplicate.existing.name}</p>
                     <p>Price: ${duplicate.existing.price}</p>
@@ -67,7 +77,9 @@ const DuplicateHandlingModal: React.FC<DuplicateHandlingModalProps> = ({
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">Imported Product</h3>
+                  <h3 className="font-medium text-gray-900">
+                    Imported Product
+                  </h3>
                   <div className="mt-2 text-sm text-gray-600">
                     <p>Name: {duplicate.imported.name}</p>
                     <p>Price: ${duplicate.imported.price}</p>
@@ -81,8 +93,8 @@ const DuplicateHandlingModal: React.FC<DuplicateHandlingModalProps> = ({
                   <input
                     type="radio"
                     name={`resolution-${index}`}
-                    checked={resolutions[index].action === 'skip'}
-                    onChange={() => handleResolutionChange(index, 'skip')}
+                    checked={resolutions[index].action === "skip"}
+                    onChange={() => handleResolutionChange(index, "skip")}
                     className="mr-2"
                   />
                   Skip
@@ -91,8 +103,8 @@ const DuplicateHandlingModal: React.FC<DuplicateHandlingModalProps> = ({
                   <input
                     type="radio"
                     name={`resolution-${index}`}
-                    checked={resolutions[index].action === 'update'}
-                    onChange={() => handleResolutionChange(index, 'update')}
+                    checked={resolutions[index].action === "update"}
+                    onChange={() => handleResolutionChange(index, "update")}
                     className="mr-2"
                   />
                   Update Existing
@@ -101,8 +113,8 @@ const DuplicateHandlingModal: React.FC<DuplicateHandlingModalProps> = ({
                   <input
                     type="radio"
                     name={`resolution-${index}`}
-                    checked={resolutions[index].action === 'create'}
-                    onChange={() => handleResolutionChange(index, 'create')}
+                    checked={resolutions[index].action === "create"}
+                    onChange={() => handleResolutionChange(index, "create")}
                     className="mr-2"
                   />
                   Create New
@@ -138,9 +150,12 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
   storeId,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [updateProduct] = useUpdateProductMutation();
   const [createCategory] = useCreateCategoryMutation();
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-  const [duplicateProducts, setDuplicateProducts] = useState<Array<{ existing: Product; imported: any }>>([]);
+  const [duplicateProducts, setDuplicateProducts] = useState<
+    Array<{ existing: Product; imported: any }>
+  >([]);
   const [pendingImport, setPendingImport] = useState<any[]>([]);
 
   const handleExport = () => {
@@ -218,7 +233,10 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
               }).unwrap();
               categoryMap.set(categoryName.toLowerCase(), newCategory);
             } catch (error) {
-              console.error(`Failed to create category ${categoryName}:`, error);
+              console.error(
+                `Failed to create category ${categoryName}:`,
+                error
+              );
               toast.error(`Failed to create category: ${categoryName}`);
             }
           }
@@ -226,7 +244,6 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
           // Transform the data and check for duplicates
           const transformedProducts = [];
           const duplicates = [];
-          const existingProductNames = new Set(products.map(p => p.name.toLowerCase()));
 
           for (const row of jsonData as any[]) {
             const categoryName = row.Category?.trim();
@@ -235,7 +252,9 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
               : categories[0];
 
             if (!category) {
-              throw new Error(`Category "${categoryName}" could not be created`);
+              throw new Error(
+                `Category "${categoryName}" could not be created`
+              );
             }
 
             const transformedProduct = {
@@ -250,13 +269,14 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
 
             // Check for duplicates
             const existingProduct = products.find(
-              p => p.name.toLowerCase() === transformedProduct.name.toLowerCase()
+              (p) =>
+                p.name.toLowerCase() === transformedProduct.name.toLowerCase()
             );
 
             if (existingProduct) {
               duplicates.push({
                 existing: existingProduct,
-                imported: transformedProduct
+                imported: transformedProduct,
               });
             } else {
               transformedProducts.push(transformedProduct);
@@ -268,6 +288,7 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
             setPendingImport(transformedProducts);
             setShowDuplicateModal(true);
           } else {
+            // If no duplicates, directly import the products
             onImport(transformedProducts);
             toast.success("Products imported successfully");
           }
@@ -287,35 +308,57 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
     }
   };
 
-  const handleDuplicateResolution = (resolutions: Array<{ action: 'skip' | 'update' | 'create'; product: any }>) => {
-    const productsToImport = [...pendingImport];
+  const handleDuplicateResolution = async (
+    resolutions: Array<{ action: "skip" | "update" | "create"; product: any }>
+  ) => {
+    const productsToImport = [];
 
-    resolutions.forEach(({ action, product }) => {
+    // Include non-duplicate products from pendingImport
+    productsToImport.push(...pendingImport);
+
+    for (const { action, product } of resolutions) {
       switch (action) {
-        case 'skip':
+        case "skip":
           // Do nothing
           break;
-        case 'update':
-          // Find the existing product and update it
-          const existingProduct = products.find(p => p.name.toLowerCase() === product.name.toLowerCase());
+        case "update":
+          // Find the existing product and prepare update data
+          const existingProduct = products.find(
+            (p) => p.name.toLowerCase() === product.name.toLowerCase()
+          );
           if (existingProduct) {
+            const { _id, ...updateData } = product; // Exclude _id from the update data
             productsToImport.push({
-              ...product,
-              _id: existingProduct._id,
-              isUpdate: true // Flag to indicate this is an update
+              ...updateData,
+              _id: existingProduct._id, // Use the existing product's _id
+              isUpdate: true, // Flag to indicate this is an update
             });
           }
           break;
-        case 'create':
+        case "create":
           // Add as a new product with a slightly modified name
           productsToImport.push({
             ...product,
-            name: `${product.name} (New)`
+            name: `${product.name} (Copy)`,
           });
           break;
       }
-    });
+    }
 
+    // Call the update mutation for each product to be updated
+    for (const product of productsToImport) {
+      if (product.isUpdate) {
+        try {
+          await updateProduct({ _id: product._id, ...product }).unwrap();
+          toast.success(`Product ${product.name} updated successfully.`);
+        } catch (error) {
+          console.error(`Failed to update product ${product.name}:`, error);
+          toast.error(`Failed to update product: ${product.name}`);
+        }
+      }
+    }
+
+    // After processing all resolutions, call onImport with the new products
     onImport(productsToImport);
     toast.success("Products imported successfully");
   };
