@@ -12,6 +12,7 @@ import {
 import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionService";
 import { checkSubscriptionLimit } from "../utils/subscriptionLimits";
 import ProductForm from "../components/products/ProductForm";
+import ImportExportButtons from "../components/products/ImportExportButtons";
 import UpgradeModal from "../components/subscription/UpgradeModal";
 import { handleOfflineAction } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
@@ -99,6 +100,7 @@ const Products = () => {
 
     fetchOfflineProducts();
   }, []);
+
   const resetForm = () => {
     setEditingProduct(null);
     setModifiers([]);
@@ -183,6 +185,45 @@ const Products = () => {
     setEditingProduct(null);
     setModifiers([]);
     setIsModalOpen(true);
+  };
+
+  const handleImportProducts = async (products: any[]) => {
+    const remainingSlots = subscription?.subscription.maxProducts - (localProducts?.length || 0);
+    
+    if (products.length > remainingSlots) {
+      toast.error(`Cannot import ${products.length} products. You only have ${remainingSlots} slots available in your current plan.`);
+      return;
+    }
+
+    try {
+      for (const product of products) {
+        const productData = {
+          ...product,
+          store: storeId,
+        };
+
+        if (!networkStatus.isNetworkOnline()) {
+          const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const newProduct = {
+            _id: tempId,
+            ...productData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          await handleOfflineAction('product', 'create', newProduct);
+          setLocalProducts(prev => [...prev, newProduct]);
+          saveProductsToLocalStorage(storeId!, [...localProducts, newProduct]);
+        } else {
+          const result = await createProduct(productData).unwrap();
+          setLocalProducts(prev => [...prev, result]);
+          saveProductsToLocalStorage(storeId!, [...localProducts, result]);
+        }
+      }
+    } catch (error) {
+      console.error('Error importing products:', error);
+      toast.error('Failed to import some products');
+    }
   };
 
   const onSubmit = async (data: any) => {
@@ -313,13 +354,20 @@ const Products = () => {
             <Package className="h-6 w-6" />
             Products
           </h1>
-          <button
-            onClick={handleAddProduct}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-hover"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </button>
+          <div className="flex gap-4">
+            <ImportExportButtons
+              products={localProducts}
+              categories={localCategories}
+              onImport={handleImportProducts}
+            />
+            <button
+              onClick={handleAddProduct}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-hover"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Product
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
