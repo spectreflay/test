@@ -25,16 +25,24 @@ const Settings = () => {
     currency: "USD",
     timeZone: "UTC",
     receiptFooter: "",
+    qrCodeImageUrl: "",
   });
 
   useEffect(() => {
     if (store?.settings) {
-      setSettings(store.settings);
+      setSettings((prev) => ({
+        ...prev,
+        ...store.settings,
+      }));
     }
   }, [store]);
 
   const handleSave = async () => {
     try {
+      console.log("Saving settings:", {
+        _id: storeId!,
+        settings,
+      }); // Log the payload
       await updateStore({
         _id: storeId!,
         settings,
@@ -229,6 +237,32 @@ const Settings = () => {
                 }
                 className="mt-1 py-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
+            </div>
+          </div>
+          <div className="space-y-4">
+            <h2 className="text-lg font-medium text-foreground">
+              Payment Settings
+            </h2>
+            <div>
+              <label className="block text-sm font-medium text-primary">
+                QR Code Image URL
+              </label>
+              <input
+                type="url"
+                value={settings.qrCodeImageUrl}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    qrCodeImageUrl: e.target.value,
+                  }))
+                }
+                placeholder="Enter your payment QR code image URL"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                This QR code will be displayed when customers choose QR payment
+                method
+              </p>
             </div>
           </div>
           <div>

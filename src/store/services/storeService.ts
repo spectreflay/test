@@ -13,6 +13,7 @@ export interface StoreSettings {
   currency: string;
   timeZone: string;
   receiptFooter: string;
+  qrCodeImageUrl: string; 
 }
 
 export interface Store {

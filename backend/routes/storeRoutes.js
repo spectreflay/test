@@ -93,8 +93,8 @@ router.put("/:id", protect, async (req, res) => {
     // Update nested settings if provided
     if (req.body.settings) {
       store.settings = {
-        ...store.settings.toObject(), // Merge existing settings
-        ...req.body.settings, // Overwrite with new settings
+        ...store.settings.toObject(),
+        ...req.body.settings,
       };
     }
 

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { useGetStoreQuery } from '../../../store/services/storeService';
+import { useParams } from 'react-router-dom';
 
 interface QRPaymentProps {
   total: number;
@@ -9,9 +11,13 @@ interface QRPaymentProps {
 
 const QRPayment = ({ total, onSubmit, onBack }: QRPaymentProps) => {
   const [referenceNumber, setReferenceNumber] = useState('');
+  const { storeId } = useParams<{ storeId: string }>();
+  const { data: store } = useGetStoreQuery(storeId!);
   
-  // Generate a dummy QR code URL (in production, this would be from your payment provider)
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PAY_${total}_${Date.now()}`;
+  // Generate a fallback QR code URL if store QR code is not set
+  const fallbackQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PAY_${total}_${Date.now()}`;
+  
+  const qrCodeUrl = store?.settings?.qrCodeImageUrl || fallbackQrUrl;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
