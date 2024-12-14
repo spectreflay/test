@@ -29,13 +29,10 @@ import { inventoryApi } from "../store/services/inventoryService";
 import { toast } from "react-hot-toast";
 import { discountApi } from "../store/services/discountService";
 
-interface IdMapping {
-  [tempId: string]: string;
-}
 class SyncManager {
   private isSyncing: boolean = false;
   private syncInterval: NodeJS.Timeout | null = null;
-  private idMappings: IdMapping = {};
+  private idMappings: Map<string, string> = new Map();
 
   constructor() {
     this.setupNetworkListener();
@@ -61,432 +58,190 @@ class SyncManager {
   private async syncProducts() {
     const unsynedProducts = await getUnsynedProducts();
     const processedIds = new Set<string>();
-    const actionsMap = new Map<
-      string,
-      { action: string; data: any; offlineId: string; synced: boolean }[]
-    >();
 
-    // Group actions by product ID
     for (const product of unsynedProducts) {
-      const productId = product.data._id;
-      if (!actionsMap.has(productId)) {
-        actionsMap.set(productId, []);
-      }
-      actionsMap.get(productId)!.push({
-        action: product.action,
-        data: product.data,
-        offlineId: product.id,
-        synced: false,
-      });
-    }
-
-    for (const [productId, actions] of actionsMap) {
-      if (processedIds.has(productId)) continue;
-      processedIds.add(productId);
+      if (processedIds.has(product.data._id)) continue;
+      processedIds.add(product.data._id);
 
       try {
-        let serverProductId = productId;
-
-        for (const action of actions) {
-          if (action.synced) continue;
-
-          switch (action.action) {
-            case "create":
-              if (productId.startsWith("temp_")) {
-                const { _id, ...productDataWithoutId } = action.data;
-                const createdProduct = await store
-                  .dispatch(
-                    productApi.endpoints.createProduct.initiate(
-                      productDataWithoutId
-                    )
-                  )
-                  .unwrap();
-                serverProductId = createdProduct._id;
-                
-                // Store the ID mapping
-                this.idMappings[productId] = serverProductId;
-
-                // Update local state
-                store.dispatch(
-                  productApi.util.updateQueryData(
-                    "getProducts",
-                    action.data.store,
-                    (draft) => {
-                      const index = draft.findIndex((p) => p._id === productId);
-                      if (index !== -1) {
-                        draft[index] = createdProduct;
-                      } else {
-                        draft.push(createdProduct);
-                      }
-                    }
-                  )
-                );
-              }
-              break;
-            case "update":
-              await store
+        switch (product.action) {
+          case "create":
+            if (product.data._id.startsWith("temp_")) {
+              const { _id, ...productData } = product.data;
+              const createdProduct = await store
                 .dispatch(
-                  productApi.endpoints.updateProduct.initiate({
-                    ...action.data,
-                    _id: serverProductId,
-                  })
+                  productApi.endpoints.createProduct.initiate(productData)
                 )
                 .unwrap();
-              break;
-            case "delete":
-              await store
-                .dispatch(
-                  productApi.endpoints.deleteProduct.initiate(serverProductId)
-                )
-                .unwrap();
+
+              // Store the mapping of temporary to server ID
+              this.idMappings.set(_id, createdProduct._id);
+
+              // Update local state
               store.dispatch(
                 productApi.util.updateQueryData(
                   "getProducts",
-                  action.data.store,
+                  productData.store,
                   (draft) => {
-                    return draft.filter((p) => p._id !== serverProductId);
+                    const index = draft.findIndex((p) => p._id === _id);
+                    if (index !== -1) {
+                      draft[index] = createdProduct;
+                    }
                   }
                 )
               );
-              break;
-          }
+            }
+            break;
 
-          action.synced = true;
-          await markProductAsSynced(action.offlineId);
-          await deleteOfflineProduct(action.offlineId);
+          case "update":
+            const updateId =
+              this.idMappings.get(product.data._id) || product.data._id;
+            await store
+              .dispatch(
+                productApi.endpoints.updateProduct.initiate({
+                  ...product.data,
+                  _id: updateId,
+                })
+              )
+              .unwrap();
+            break;
+
+          case "delete":
+            const deleteId =
+              this.idMappings.get(product.data._id) || product.data._id;
+            await store
+              .dispatch(productApi.endpoints.deleteProduct.initiate(deleteId))
+              .unwrap();
+            break;
         }
+
+        await markProductAsSynced(product.id);
+        await deleteOfflineProduct(product.id);
       } catch (error) {
         console.error("Failed to sync product:", error);
-        // If there's an error, we keep the unsynced offline data for future sync attempts
       }
     }
 
     return unsynedProducts.length;
   }
+
   private async syncCategories() {
     const unsynedCategories = await getUnsynedCategories();
-    const processedIds = new Set<string>();
-    const actionsMap = new Map<
-      string,
-      { action: string; data: any; offlineId: string; synced: boolean }[]
-    >();
+    let syncedCount = 0;
 
-    // Group actions by category ID
     for (const category of unsynedCategories) {
-      const categoryId = category.data._id;
-      if (!actionsMap.has(categoryId)) {
-        actionsMap.set(categoryId, []);
-      }
-      actionsMap.get(categoryId)!.push({
-        action: category.action,
-        data: category.data,
-        offlineId: category.id,
-        synced: false,
-      });
-    }
-
-    for (const [categoryId, actions] of actionsMap) {
-      if (processedIds.has(categoryId)) continue;
-      processedIds.add(categoryId);
-
       try {
-        let serverCategoryId = categoryId;
-        let latestCategoryData = actions[actions.length - 1].data;
+        const result = await store
+          .dispatch(
+            categoryApi.endpoints.createCategory.initiate(category.data)
+          )
+          .unwrap();
 
-        for (const action of actions) {
-          if (action.synced) continue;
-
-          switch (action.action) {
-            case "create":
-              if (categoryId.startsWith("temp_")) {
-                const createdCategory = await store
-                  .dispatch(
-                    categoryApi.endpoints.createCategory.initiate(action.data)
-                  )
-                  .unwrap();
-                serverCategoryId = createdCategory._id;
-
-                // Update local state
-                store.dispatch(
-                  categoryApi.util.updateQueryData(
-                    "getCategories",
-                    action.data.store,
-                    (draft) => {
-                      const index = draft.findIndex(
-                        (c) => c._id === categoryId
-                      );
-                      if (index !== -1) {
-                        draft[index] = createdCategory;
-                      } else {
-                        draft.push(createdCategory);
-                      }
-                    }
-                  )
-                );
-              }
-              break;
-            case "update":
-              await store
-                .dispatch(
-                  categoryApi.endpoints.updateCategory.initiate({
-                    ...action.data,
-                    _id: serverCategoryId,
-                  })
-                )
-                .unwrap();
-              break;
-            case "delete":
-              await store
-                .dispatch(
-                  categoryApi.endpoints.deleteCategory.initiate(
-                    serverCategoryId
-                  )
-                )
-                .unwrap();
-              store.dispatch(
-                categoryApi.util.updateQueryData(
-                  "getCategories",
-                  action.data.store,
-                  (draft) => {
-                    return draft.filter((c) => c._id !== serverCategoryId);
-                  }
-                )
-              );
-              break;
-          }
-
-          action.synced = true;
-          await markCategoryAsSynced(action.offlineId);
-          await deleteOfflineCategory(action.offlineId);
-        }
+        await markCategoryAsSynced(category.id);
+        await deleteOfflineCategory(category.id);
+        syncedCount++;
       } catch (error) {
         console.error("Failed to sync category:", error);
-        // If there's an error, we keep the unsynced offline data for future sync attempts
       }
     }
 
-    return unsynedCategories.length;
+    return syncedCount;
   }
 
   private async syncDiscounts() {
     const unsynedDiscounts = await getUnsynedDiscounts();
-    const processedIds = new Set<string>();
-    const actionsMap = new Map<
-      string,
-      { action: string; data: any; offlineId: string; synced: boolean }[]
-    >();
+    let syncedCount = 0;
 
-    // Group actions by discount ID
     for (const discount of unsynedDiscounts) {
-      const discountId = discount.data._id;
-      if (!actionsMap.has(discountId)) {
-        actionsMap.set(discountId, []);
-      }
-      actionsMap.get(discountId)!.push({
-        action: discount.action,
-        data: discount.data,
-        offlineId: discount.id,
-        synced: false,
-      });
-    }
-
-    for (const [discountId, actions] of actionsMap) {
-      if (processedIds.has(discountId)) continue;
-      processedIds.add(discountId);
-
       try {
-        let serverDiscountId = discountId;
+        const result = await store
+          .dispatch(
+            discountApi.endpoints.createDiscount.initiate(discount.data)
+          )
+          .unwrap();
 
-        for (const action of actions) {
-          if (action.synced) continue;
-
-          switch (action.action) {
-            case "create":
-              if (discountId.startsWith("temp_")) {
-                const { _id, ...discountDataWithoutId } = action.data;
-                const createdDiscount = await store
-                  .dispatch(
-                    discountApi.endpoints.createDiscount.initiate(
-                      discountDataWithoutId
-                    )
-                  )
-                  .unwrap();
-
-                serverDiscountId = createdDiscount._id;
-                // Store the mapping of temporary to real ID
-                this.tempToRealIdMap.set(discountId, serverDiscountId);
-
-                // Update local state
-                store.dispatch(
-                  discountApi.util.updateQueryData(
-                    "getDiscounts",
-                    action.data.store,
-                    (draft) => {
-                      const index = draft.findIndex((d) => d._id === discountId);
-                      if (index !== -1) {
-                        draft[index] = createdDiscount;
-                      } else {
-                        draft.push(createdDiscount);
-                      }
-                    }
-                  )
-                );
-              }
-              break;
-            case "update":
-              await store
-                .dispatch(
-                  discountApi.endpoints.updateDiscount.initiate({
-                    ...action.data,
-                    _id: serverDiscountId,
-                  })
-                )
-                .unwrap();
-              break;
-            case "delete":
-              await store
-                .dispatch(
-                  discountApi.endpoints.deleteDiscount.initiate(serverDiscountId)
-                )
-                .unwrap();
-              store.dispatch(
-                discountApi.util.updateQueryData(
-                  "getDiscounts",
-                  action.data.store,
-                  (draft) => {
-                    return draft.filter((d) => d._id !== serverDiscountId);
-                  }
-                )
-              );
-              break;
-          }
-
-          action.synced = true;
-          await markDiscountAsSynced(action.offlineId);
-          await deleteOfflineDiscount(action.offlineId);
-        }
+        await markDiscountAsSynced(discount.id);
+        await deleteOfflineDiscount(discount.id);
+        syncedCount++;
       } catch (error) {
         console.error("Failed to sync discount:", error);
-        // If there's an error, we keep the unsynced offline data for future sync attempts
       }
     }
 
-    return unsynedDiscounts.length;
+    return syncedCount;
   }
 
   private async syncInventory() {
     const unsynedInventory = await getUnsynedInventory();
-    const processedIds = new Set<string>();
-    const actionsMap = new Map<
-      string,
-      { action: string; data: any; offlineId: string; synced: boolean }[]
-    >();
+    let syncedCount = 0;
 
-    // Group actions by inventory ID
     for (const inventory of unsynedInventory) {
-      const inventoryId = inventory.data._id;
-      if (!actionsMap.has(inventoryId)) {
-        actionsMap.set(inventoryId, []);
-      }
-      actionsMap.get(inventoryId)!.push({
-        action: inventory.action,
-        data: inventory.data,
-        offlineId: inventory.id,
-        synced: false,
-      });
-    }
-
-    for (const [inventoryId, actions] of actionsMap) {
-      if (processedIds.has(inventoryId)) continue;
-      processedIds.add(inventoryId);
-
       try {
-        for (const action of actions) {
-          if (action.synced) continue;
+        // Update product references with server IDs
+        const updatedData = {
+          ...inventory.data,
+          product:
+            this.idMappings.get(inventory.data.product) ||
+            inventory.data.product,
+        };
 
-          switch (action.action) {
-            case "create":
-            case "update":
-              await store
-                .dispatch(
-                  inventoryApi.endpoints.addStockMovement.initiate(action.data)
-                )
-                .unwrap();
-              break;
-          }
+        await store
+          .dispatch(
+            inventoryApi.endpoints.addStockMovement.initiate(updatedData)
+          )
+          .unwrap();
 
-          action.synced = true;
-          await markInventoryAsSynced(action.offlineId);
-          await deleteOfflineInventory(action.offlineId);
-        }
+        await markInventoryAsSynced(inventory.id);
+        await deleteOfflineInventory(inventory.id);
+        syncedCount++;
       } catch (error) {
         console.error("Failed to sync inventory:", error);
-        // If there's an error, we keep the unsynced offline data for future sync attempts
       }
     }
 
-    return unsynedInventory.length;
+    return syncedCount;
   }
 
   private async syncSales() {
     const unsynedSales = await getUnsynedSales();
-    let syncedCount = 0;
 
     for (const sale of unsynedSales) {
       try {
-        // Update sale data with real product IDs
-        const updatedSaleData = {
+        // Update sale items with server IDs
+        const updatedItems = sale.data.items.map((item: any) => ({
+          ...item,
+          product: this.idMappings.get(item.product) || item.product,
+        }));
+
+        const saleData = {
           ...sale.data,
-          items: sale.data.items.map((item: any) => ({
-            ...item,
-            product: this.idMappings[item.product] || item.product,
-          })),
+          items: updatedItems,
         };
 
         const result = await store
-          .dispatch(saleApi.endpoints.createSale.initiate(updatedSaleData))
+          .dispatch(saleApi.endpoints.createSale.initiate(saleData))
           .unwrap();
 
-        // Get all active subscriptions for getSales queries
-        const subscriptions = store.getState().api.subscriptions;
-        const salesQueries = Object.entries(subscriptions)
-          .filter(([key]) => key.startsWith('getSales'))
-          .map(([key]) => {
-            const match = key.match(/getSales\((.*?)\)/);
-            return match ? match[1] : null;
+        // Update local state
+        store.dispatch(
+          saleApi.util.updateQueryData("getSales", sale.data.store, (draft) => {
+            const index = draft.findIndex((s) => s._id === sale.data._id);
+            if (index !== -1) {
+              draft[index] = result;
+            } else {
+              draft.unshift(result);
+            }
           })
-          .filter(Boolean);
-
-        // Update all active getSales queries
-        salesQueries.forEach(storeId => {
-          store.dispatch(
-            saleApi.util.updateQueryData(
-              "getSales",
-              storeId,
-              (draft) => {
-                const index = draft.findIndex((s) => s._id === sale.data._id);
-                if (index !== -1) {
-                  draft[index] = result;
-                } else {
-                  draft.unshift(result);
-                }
-                return draft;
-              }
-            )
-          );
-        });
-
-        store.dispatch(saleApi.util.invalidateTags(['Sales']));
+        );
 
         await markSaleAsSynced(sale.id);
         await deleteOfflineSale(sale.id);
-        syncedCount++;
       } catch (error) {
         console.error("Failed to sync sale:", error);
       }
     }
 
-    return syncedCount;
+    return unsynedSales.length;
   }
 
   private async syncReports() {
@@ -510,7 +265,7 @@ class SyncManager {
 
     try {
       this.isSyncing = true;
-      this.idMappings = {};
+      this.idMappings.clear();
 
       // Sync in the correct order: categories -> products -> discounts -> inventory -> sales -> reports
       const [
@@ -529,36 +284,17 @@ class SyncManager {
         this.syncReports(),
       ]);
 
-      const syncedEntities = [
-        { type: "product", count: productsCount },
-        { type: "category", count: categoriesCount },
-        { type: "discount", count: discountsCount },
-        { type: "inventory", count: inventoryCount },
-        { type: "sale", count: salesCount },
-        { type: "report", count: reportsCount },
-      ].filter((entity) => entity.count > 0);
-
-      const totalSynced = syncedEntities.reduce(
-        (sum, entity) => sum + entity.count,
-        0
-      );
+      const totalSynced =
+        categoriesCount +
+        productsCount +
+        discountsCount +
+        inventoryCount +
+        salesCount;
 
       if (totalSynced > 0) {
-        // Show individual entity sync notifications
-        for (const entity of syncedEntities) {
-          const message = `Successfully synchronized ${entity.count} ${
-            entity.type
-          }${entity.count > 1 ? "s" : ""}`;
-          await createNotification(store.dispatch, message, "system");
-          toast.success(message);
-        }
-
-        // Show overall sync notification
-        const overallMessage = `Successfully synchronized ${totalSynced} total item${
-          totalSynced > 1 ? "s" : ""
-        }`;
-        await createNotification(store.dispatch, overallMessage, "system");
-        toast.success(overallMessage);
+        const message = `Successfully synchronized ${totalSynced} items`;
+        await createNotification(store.dispatch, message, "system");
+        toast.success(message);
       }
     } catch (error) {
       console.error("Error during sync process:", error);
@@ -567,58 +303,7 @@ class SyncManager {
       toast.error(errorMessage);
     } finally {
       this.isSyncing = false;
-      this.tempToRealIdMap.clear();
-    }
-  }
-
-  private async updateOfflineSaleReferences() {
-    const db = await initDB();
-    const unsynedSales = await getUnsynedSales();
-
-    for (const sale of unsynedSales) {
-      let needsUpdate = false;
-      const updatedItems = sale.data.items.map((item) => {
-        const updatedItem = { ...item };
-
-        // Update product reference
-        if (item.product.startsWith("temp_")) {
-          const realProductId = this.tempToRealIdMap.get(item.product);
-          if (realProductId) {
-            updatedItem.product = realProductId;
-            needsUpdate = true;
-          }
-        }
-
-        // Update discount references
-        if (item.discounts?.length) {
-          updatedItem.discounts = item.discounts.map((discount) => {
-            if (discount._id?.startsWith("temp_")) {
-              const realDiscountId = this.tempToRealIdMap.get(discount._id);
-              return realDiscountId
-                ? { ...discount, _id: realDiscountId }
-                : discount;
-            }
-            return discount;
-          });
-          needsUpdate = true;
-        }
-
-        return updatedItem;
-      });
-
-      if (needsUpdate) {
-        const updatedSale = {
-          ...sale,
-          data: {
-            ...sale.data,
-            items: updatedItems,
-          },
-        };
-
-        // Update the sale in IndexedDB
-        const tx = db.transaction("offlineSales", "readwrite");
-        await tx.store.put(updatedSale);
-      }
+      this.idMappings.clear();
     }
   }
 
@@ -630,4 +315,3 @@ class SyncManager {
 }
 
 export const syncManager = new SyncManager();
-
