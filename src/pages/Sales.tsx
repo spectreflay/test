@@ -20,7 +20,7 @@ import DiscountModal from "../components/sales/DiscountModal";
 import { CartItem as CartItemType } from "../components/sales/types";
 import { networkStatus } from "../utils/networkStatus";
 import { saveOfflineSale } from "../utils/indexedDB";
-import OfflineIndicator from "../components/sales/OfflineIndicator";
+import OfflineIndicator from "../components/OfflineIndicator";
 import { syncManager } from "../utils/syncManager";
 import {
   getProductsFromLocalStorage,

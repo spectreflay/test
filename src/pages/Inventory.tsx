@@ -19,7 +19,7 @@ import ProductStockHistoryModal from "../components/inventory/ProductStockHistor
 import * as XLSX from "xlsx";
 import { networkStatus } from "../utils/networkStatus";
 import { handleOfflineAction } from "../utils/offlineStorage";
-import OfflineIndicator from "../components/sales/OfflineIndicator";
+import OfflineIndicator from "../components/OfflineIndicator";
 import {
   getProductsFromLocalStorage,
   saveProductsToLocalStorage,

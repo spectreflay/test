@@ -13,6 +13,7 @@ import TopProducts from "../components/reports/TopProducts";
 import UpgradeModal from "../components/subscription/UpgradeModal";
 import { getSalesFromLocalStorage } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
+import OfflineIndicator from "../components/OfflineIndicator";
 
 const Reports = () => {
   const { storeId } = useParams<{ storeId: string }>();
@@ -169,6 +170,7 @@ const Reports = () => {
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
+       <OfflineIndicator />
     </div>
   );
 };

@@ -11,7 +11,7 @@ import {
 } from "../store/services/discountService";
 import { handleOfflineAction } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
-import OfflineIndicator from "../components/sales/OfflineIndicator";
+import OfflineIndicator from "../components/OfflineIndicator";
 import { getUnsynedDiscounts } from "../utils/indexedDB";
 import {
   saveDiscountsToLocalStorage,

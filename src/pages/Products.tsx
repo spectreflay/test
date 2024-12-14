@@ -15,7 +15,7 @@ import ProductForm from "../components/products/ProductForm";
 import UpgradeModal from "../components/subscription/UpgradeModal";
 import { handleOfflineAction } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
-import OfflineIndicator from "../components/sales/OfflineIndicator";
+import OfflineIndicator from "../components/OfflineIndicator";
 import { getUnsynedProducts } from "../utils/indexedDB";
 import {
   saveProductsToLocalStorage,
