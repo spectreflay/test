@@ -1,7 +1,13 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { BarChart2 } from "lucide-react";
-import { format, parseISO, startOfDay, endOfDay, isWithinInterval } from "date-fns";
+import {
+  format,
+  parseISO,
+  startOfDay,
+  endOfDay,
+  isWithinInterval,
+} from "date-fns";
 import { utils, writeFile } from "xlsx";
 import { useGetSalesQuery } from "../store/services/saleService";
 import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionService";
@@ -11,14 +17,19 @@ import SalesMetrics from "../components/reports/SalesMetrics";
 import SalesTable from "../components/reports/SalesTable";
 import TopProducts from "../components/reports/TopProducts";
 import UpgradeModal from "../components/subscription/UpgradeModal";
-import { getSalesFromLocalStorage } from "../utils/offlineStorage";
+import {
+  getSalesFromLocalStorage,
+  saveSalesToLocalStorage,
+} from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
 import OfflineIndicator from "../components/OfflineIndicator";
+import { syncManager } from "../utils/syncManager";
 
 const Reports = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: apiSales } = useGetSalesQuery(storeId!, {
+  const { data: apiSales, refetch } = useGetSalesQuery(storeId!, {
     skip: !networkStatus.isNetworkOnline(),
+    pollingInterval: 30000, // Poll every 30 seconds when online
   });
   const { data: subscription } = useGetCurrentSubscriptionQuery();
   const [startDate, setStartDate] = useState(
@@ -34,6 +45,7 @@ const Reports = () => {
   useEffect(() => {
     const initializeSales = async () => {
       if (networkStatus.isNetworkOnline() && apiSales) {
+        saveSalesToLocalStorage(storeId!, apiSales);
         setSales(apiSales);
       } else {
         const storedSales = getSalesFromLocalStorage(storeId!);
@@ -45,6 +57,48 @@ const Reports = () => {
 
     initializeSales();
   }, [storeId, apiSales]);
+
+  // Listen for network status changes and sync data when back online
+  useEffect(() => {
+    const handleNetworkChange = async (online: boolean) => {
+      if (online) {
+        await syncManager.syncOfflineData();
+        // Force refetch sales data after sync
+        const result = await refetch();
+        if (result.data) {
+          saveSalesToLocalStorage(storeId!, result.data);
+          setSales(result.data);
+        }
+      }
+    };
+
+    networkStatus.addCallback(handleNetworkChange);
+    return () => networkStatus.removeCallback(handleNetworkChange);
+  }, [storeId, refetch]);
+
+ 
+
+  // Check for pending syncs periodically
+  useEffect(() => {
+    const checkPendingSyncs = async () => {
+      console.log(sales.some((sale) => sale._id.startsWith("temp_")))
+      if (
+        networkStatus.isNetworkOnline() &&
+        sales.some((sale) => sale._id.startsWith("temp_"))
+      ) {
+        await syncManager.syncOfflineData();
+        // Force refetch sales data after sync
+        const result = await refetch();
+        if (result.data) {
+          saveSalesToLocalStorage(storeId!, result.data);
+          setSales(result.data);
+        }
+      }
+    };
+
+    const interval = setInterval(checkPendingSyncs, 5000); // Check every 5 seconds
+    return () => clearInterval(interval);
+  }, [sales, storeId, refetch]);
 
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -170,7 +224,7 @@ const Reports = () => {
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
-       <OfflineIndicator />
+      <OfflineIndicator />
     </div>
   );
 };
