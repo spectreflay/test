@@ -1,33 +1,41 @@
-import React, { useRef } from 'react';
-import { Download, Upload } from 'lucide-react';
-import { read, utils, writeFile } from 'xlsx';
-import { toast } from 'react-hot-toast';
-import { Product } from '../../store/services/productService';
+import React, { useRef } from "react";
+import { Download, Upload } from "lucide-react";
+import { read, utils, writeFile } from "xlsx";
+import { toast } from "react-hot-toast";
+import { Product } from "../../store/services/productService";
+import { useCreateCategoryMutation } from "../../store/services/categoryService";
 
 interface ImportExportButtonsProps {
   products: Product[];
   categories: any[];
   onImport: (products: any[]) => void;
+  storeId: string;
 }
 
 const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
   products,
   categories,
   onImport,
+  storeId,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [createCategory] = useCreateCategoryMutation();
 
   const handleExport = () => {
     try {
       // Prepare data for export
-      const exportData = products.map(product => ({
-        Name: product.name,
-        Description: product.description || '',
-        Price: product.price,
-        Stock: product.stock,
-        Category: categories.find(c => c._id === product.category)?.name || '',
-        Image: product.image || '',
-      }));
+      const exportData = products.map((product) => {
+        const categoryId = product.category._id; // Access the _id property
+        const category = categories.find((c) => c._id === categoryId);
+        return {
+          Name: product.name,
+          Description: product.description || "",
+          Price: product.price,
+          Stock: product.stock,
+          Category: category ? category.name : "", // Ensure category is found
+          Image: product.image || "",
+        };
+      });
   
       // Create workbook and worksheet
       const wb = utils.book_new();
@@ -42,19 +50,19 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
         { wch: 20 }, // Category
         { wch: 50 }, // Image
       ];
-      ws['!cols'] = colWidths;
+      ws["!cols"] = colWidths;
   
       // Add worksheet to workbook
-      utils.book_append_sheet(wb, ws, 'Products');
+      utils.book_append_sheet(wb, ws, "Products");
   
       // Generate download
-      const currentDate = new Date().toISOString().split('T')[0];
+      const currentDate = new Date().toISOString().split("T")[0];
       const fileName = `products_${currentDate}.xlsx`;
-      writeFile(wb, fileName); // Use writeFile instead of utils.writeFile
-      toast.success('Products exported successfully');
+      writeFile(wb, fileName);
+      toast.success("Products exported successfully");
     } catch (error) {
-      console.error('Export error:', error);
-      toast.error('Failed to export products');
+      console.error("Export error:", error);
+      toast.error("Failed to export products");
     }
   };
 
@@ -67,15 +75,53 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
       reader.onload = async (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = read(data, { type: 'array' });
+          const workbook = read(data, { type: "array" });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
           const jsonData = utils.sheet_to_json(worksheet);
 
-          // Validate and transform the data
+          // Create a map of existing categories
+          const categoryMap = new Map(
+            categories.map((c) => [c.name.toLowerCase(), c])
+          );
+          const newCategories = new Set<string>();
+
+          // First pass: collect all unique new categories
+          jsonData.forEach((row: any) => {
+            const categoryName = row.Category?.trim();
+            if (categoryName && !categoryMap.has(categoryName.toLowerCase())) {
+              newCategories.add(categoryName);
+            }
+          });
+
+          // Create new categories
+          for (const categoryName of newCategories) {
+            try {
+              const newCategory = await createCategory({
+                name: categoryName,
+                store: storeId,
+              }).unwrap();
+              categoryMap.set(categoryName.toLowerCase(), newCategory);
+              toast.success(`Created new category: ${categoryName}`);
+            } catch (error) {
+              console.error(
+                `Failed to create category ${categoryName}:`,
+                error
+              );
+              toast.error(`Failed to create category: ${categoryName}`);
+            }
+          }
+
+          // Transform the data
           const transformedProducts = jsonData.map((row: any) => {
-            const category = categories.find(c => c.name === row.Category);
+            const categoryName = row.Category?.trim();
+            const category = categoryName
+              ? categoryMap.get(categoryName.toLowerCase())
+              : categories[0]; // Use default category if none specified
+
             if (!category) {
-              throw new Error(`Category "${row.Category}" not found`);
+              throw new Error(
+                `Category "${categoryName}" could not be created`
+              );
             }
 
             return {
@@ -85,11 +131,12 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
               stock: Number(row.Stock),
               category: category._id,
               image: row.Image,
+              store: storeId,
             };
           });
 
           onImport(transformedProducts);
-          toast.success('Products imported successfully');
+          toast.success("Products imported successfully");
         } catch (error: any) {
           toast.error(`Import error: ${error.message}`);
         }
@@ -97,12 +144,12 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
 
       reader.readAsArrayBuffer(file);
     } catch (error) {
-      console.error('Import error:', error);
-      toast.error('Failed to import products');
+      console.error("Import error:", error);
+      toast.error("Failed to import products");
     } finally {
       // Reset file input
       if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        fileInputRef.current.value = "";
       }
     }
   };

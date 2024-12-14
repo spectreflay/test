@@ -188,10 +188,13 @@ const Products = () => {
   };
 
   const handleImportProducts = async (products: any[]) => {
-    const remainingSlots = subscription?.subscription.maxProducts - (localProducts?.length || 0);
-    
+    const remainingSlots =
+      subscription?.subscription.maxProducts - (localProducts?.length || 0);
+
     if (products.length > remainingSlots) {
-      toast.error(`Cannot import ${products.length} products. You only have ${remainingSlots} slots available in your current plan.`);
+      toast.error(
+        `Cannot import ${products.length} products. You only have ${remainingSlots} slots available in your current plan.`
+      );
       return;
     }
 
@@ -203,7 +206,9 @@ const Products = () => {
         };
 
         if (!networkStatus.isNetworkOnline()) {
-          const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const tempId = `temp_${Date.now()}_${Math.random()
+            .toString(36)
+            .substr(2, 9)}`;
           const newProduct = {
             _id: tempId,
             ...productData,
@@ -211,18 +216,18 @@ const Products = () => {
             updatedAt: new Date().toISOString(),
           };
 
-          await handleOfflineAction('product', 'create', newProduct);
-          setLocalProducts(prev => [...prev, newProduct]);
+          await handleOfflineAction("product", "create", newProduct);
+          setLocalProducts((prev) => [...prev, newProduct]);
           saveProductsToLocalStorage(storeId!, [...localProducts, newProduct]);
         } else {
           const result = await createProduct(productData).unwrap();
-          setLocalProducts(prev => [...prev, result]);
+          setLocalProducts((prev) => [...prev, result]);
           saveProductsToLocalStorage(storeId!, [...localProducts, result]);
         }
       }
     } catch (error) {
-      console.error('Error importing products:', error);
-      toast.error('Failed to import some products');
+      console.error("Error importing products:", error);
+      toast.error("Failed to import some products");
     }
   };
 
@@ -359,6 +364,7 @@ const Products = () => {
               products={localProducts}
               categories={localCategories}
               onImport={handleImportProducts}
+              storeId={storeId!}
             />
             <button
               onClick={handleAddProduct}
