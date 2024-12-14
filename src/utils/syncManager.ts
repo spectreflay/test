@@ -28,7 +28,6 @@ import { inventoryApi } from "../store/services/inventoryService";
 import { toast } from "react-hot-toast";
 import { discountApi } from "../store/services/discountService";
 
-
 class SyncManager {
   private isSyncing: boolean = false;
   private syncInterval: NodeJS.Timeout | null = null;
@@ -304,10 +303,12 @@ class SyncManager {
               if (discountId.startsWith("temp_")) {
                 const { _id, ...discountDataWithoutId } = action.data;
                 const result = await store.dispatch(
-                  discountApi.endpoints.createDiscount.initiate(discountDataWithoutId)
+                  discountApi.endpoints.createDiscount.initiate(
+                    discountDataWithoutId
+                  )
                 );
                 if (!result.data) throw new Error("Failed to create discount");
-                
+
                 serverDiscountId = result.data._id;
 
                 // Update local state
@@ -316,7 +317,9 @@ class SyncManager {
                     "getDiscounts",
                     discountData.store,
                     (draft) => {
-                      const index = draft.findIndex((d) => d._id === discountId);
+                      const index = draft.findIndex(
+                        (d) => d._id === discountId
+                      );
                       if (index !== -1) {
                         draft[index] = result.data;
                       } else {
@@ -335,7 +338,8 @@ class SyncManager {
                   ...discountData,
                 })
               );
-              if (!updateResult.data) throw new Error("Failed to update discount");
+              if (!updateResult.data)
+                throw new Error("Failed to update discount");
               break;
 
             case "delete":
@@ -395,6 +399,8 @@ class SyncManager {
 
   private async syncSales() {
     const unsynedSales = await getUnsynedSales();
+    let storeId: string | null = null;
+
     for (const sale of unsynedSales) {
       try {
         await store
@@ -402,10 +408,34 @@ class SyncManager {
           .unwrap();
         await markSaleAsSynced(sale.id);
         await deleteOfflineSale(sale.id);
+
+        // Store the storeId for later use
+        if (!storeId && sale.data.store) {
+          storeId = sale.data.store;
+        }
       } catch (error) {
         console.error("Failed to sync sale:", error);
       }
     }
+
+    // If we had any sales synced and have a storeId, refresh the sales data
+    if (unsynedSales.length > 0 && storeId) {
+      try {
+        // Force refetch sales data
+        await store.dispatch(saleApi.util.invalidateTags(["Sales"]));
+
+        // Explicitly fetch fresh sales data
+        await store.dispatch(
+          saleApi.endpoints.getSales.initiate(storeId, {
+            forceRefetch: true,
+            subscribe: false,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to refresh sales data:", error);
+      }
+    }
+
     return unsynedSales.length;
   }
 

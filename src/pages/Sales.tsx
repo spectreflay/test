@@ -141,16 +141,6 @@ const Sales = () => {
         }
       }
 
-      // Store
-      if (networkStatus.isNetworkOnline() && apiStore) {
-        saveStoreToLocalStorage(storeId!, apiStore);
-        setStore(apiStore);
-      } else {
-        const storedStore = getStoreFromLocalStorage(storeId!);
-        if (storedStore) {
-          setStore(storedStore);
-        }
-      }
     };
 
     initializeData();

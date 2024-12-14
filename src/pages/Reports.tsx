@@ -11,13 +11,13 @@ import SalesMetrics from "../components/reports/SalesMetrics";
 import SalesTable from "../components/reports/SalesTable";
 import TopProducts from "../components/reports/TopProducts";
 import UpgradeModal from "../components/subscription/UpgradeModal";
-import { getSalesFromLocalStorage } from "../utils/offlineStorage";
+import { getSalesFromLocalStorage, saveSalesToLocalStorage } from "../utils/offlineStorage";
 import { networkStatus } from "../utils/networkStatus";
 import OfflineIndicator from "../components/OfflineIndicator";
 
 const Reports = () => {
   const { storeId } = useParams<{ storeId: string }>();
-  const { data: apiSales } = useGetSalesQuery(storeId!, {
+  const { data: apiSales,refetch } = useGetSalesQuery(storeId!, {
     skip: !networkStatus.isNetworkOnline(),
   });
   const { data: subscription } = useGetCurrentSubscriptionQuery();
@@ -34,6 +34,7 @@ const Reports = () => {
   useEffect(() => {
     const initializeSales = async () => {
       if (networkStatus.isNetworkOnline() && apiSales) {
+        saveSalesToLocalStorage(storeId!, apiSales);
         setSales(apiSales);
       } else {
         const storedSales = getSalesFromLocalStorage(storeId!);
@@ -45,6 +46,10 @@ const Reports = () => {
 
     initializeSales();
   }, [storeId, apiSales]);
+
+  if(networkStatus.isNetworkOnline() && sales.some(sales => sales.status === 'pending_sync')){
+    refetch();
+  }
 
   const filteredSales = useMemo(() => {
     if (!sales) return [];
