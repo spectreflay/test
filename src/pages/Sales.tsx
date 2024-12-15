@@ -34,6 +34,7 @@ import {
   getStoreFromLocalStorage,
   saveStoreToLocalStorage,
 } from "../utils/offlineStorage";
+import BarcodeScanner from "../components/sales/BarcodeScanner";
 
 const Sales = () => {
   const { storeId } = useParams<{ storeId: string }>();
@@ -422,6 +423,16 @@ const Sales = () => {
     setShowCart(false);
   };
 
+  const handleBarcodeScan = (barcode: string) => {
+    const product = products?.find((p) => p.barcode === barcode);
+    if (product) {
+      addToCart(product);
+      toast.success(`Added ${product.name} to cart`);
+    } else {
+      toast.error("Product not found");
+    }
+  };
+
   if (
     productsLoading ||
     categoriesLoading ||
@@ -446,6 +457,10 @@ const Sales = () => {
         )}
       </button>
 
+      <div className="lg:hidden mb-4">
+        <BarcodeScanner onScan={handleBarcodeScan} />
+      </div>
+
       {/* Main Content Area */}
       <div
         className={`flex-1 flex flex-col ${
@@ -454,6 +469,9 @@ const Sales = () => {
       >
         <div className="mb-4 space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
+            <div className="hidden lg:block">
+              <BarcodeScanner onScan={handleBarcodeScan} />
+            </div>
             <input
               type="text"
               placeholder="Search products..."

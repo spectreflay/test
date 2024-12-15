@@ -49,5 +49,7 @@ const productSchema = new mongoose.Schema({
   timestamps: true
 });
 
+productSchema.index({ barcode: 1 });
+
 const Product = mongoose.model('Product', productSchema);
 export default Product;

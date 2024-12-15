@@ -2,6 +2,7 @@ import React from "react";
 import { useForm } from "react-hook-form";
 import ModifierForm from "./ModifierForm";
 import { Category } from "../../store/services/categoryService";
+import BarcodeGenerator from "./BarcodeGenerator";
 
 interface ProductFormProps {
   categories: Category[];
@@ -38,13 +39,18 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm({
     defaultValues: {
       ...initialData,
       category: initialData?.category?._id || initialData?.category,
+      barcode: initialData?.barcode || "",
     },
   });
+
+  const barcode = watch("barcode");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -147,6 +153,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
         onAddModifierOption={onAddModifierOption}
         onRemoveModifier={onRemoveModifier}
         onRemoveModifierOption={onRemoveModifierOption}
+      />
+
+      <BarcodeGenerator
+        value={barcode}
+        onChange={(value) => setValue("barcode", value)}
       />
 
       <div className="flex justify-end space-x-3">
