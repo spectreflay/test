@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Check, Store, X } from "lucide-react";
+import { Check, Store, X } from 'lucide-react';
 import { toast } from "react-hot-toast";
 import {
   useGetSubscriptionsQuery,
@@ -29,6 +29,10 @@ const SubscriptionPage = () => {
 
     if (status === "success" && paymentId) {
       handlePaymentVerification(paymentId);
+      // Add this block to close the window
+      if (typeof window !== 'undefined') {
+        window.close();
+      }
     } else if (status === "failed") {
       toast.error("Payment failed. Please try again.");
       navigate("/subscription", { replace: true });
@@ -206,3 +210,4 @@ const SubscriptionPage = () => {
 };
 
 export default SubscriptionPage;
+
