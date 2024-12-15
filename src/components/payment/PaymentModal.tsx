@@ -53,15 +53,24 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     },
   ];
 
-  const handlePaymentSuccess = async (paymentId?: string) => {
+  const handlePaymentSuccess = () => {
     setCurrentStep(2);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Show success state briefly
     onSuccess();
   };
 
   const handlePaymentError = (error: string) => {
+    console.error('Payment error:', error);
     setSelectedMethod(null);
     setCurrentStep(0);
+  };
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+      if (currentStep === 1) {
+        setSelectedMethod(null);
+      }
+    }
   };
 
   if (!isOpen) return null;
@@ -107,8 +116,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               {currentStep === 1 && selectedMethod === 'card' && (
                 <CardPaymentForm
                   amount={amount}
+                  subscriptionId={subscriptionId}
                   onSuccess={handlePaymentSuccess}
                   onError={handlePaymentError}
+                  onBack={handleBack}
                 />
               )}
 
@@ -119,6 +130,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   subscriptionId={subscriptionId}
                   onSuccess={handlePaymentSuccess}
                   onError={handlePaymentError}
+                  onBack={handleBack}
                 />
               )}
             </div>

@@ -4,13 +4,13 @@ import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { createSource, getSourceStatus } from '../../utils/paymongo';
 import { useSubscribeMutation } from '../../store/services/subscriptionService';
-import { PaymentMethod } from './types';
 
 interface EWalletPaymentProps {
-  type: Extract<PaymentMethod, 'gcash' | 'grab_pay' | 'maya'>;
+  type: 'gcash' | 'grab_pay' | 'maya';
   amount: number;
   subscriptionId: string;
   onSuccess: () => void;
+  onError: (error: string) => void;
   onBack: () => void;
 }
 
@@ -19,7 +19,8 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
   amount,
   subscriptionId,
   onSuccess,
-  onBack,
+  onError,
+  onBack
 }) => {
   const [sourceData, setSourceData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +56,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
               onSuccess();
             } else if (status.attributes.status === 'expired' || status.attributes.status === 'cancelled') {
               clearInterval(interval);
-              toast.error('Payment failed or expired');
+              onError('Payment failed or expired');
             }
           } catch (error) {
             console.error('Error checking payment status:', error);
@@ -69,7 +70,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
           window.open(source.attributes.redirect.checkout_url, '_blank');
         }
       } catch (error: any) {
-        toast.error(error.message || 'Failed to initialize payment');
+        onError(error.message || 'Failed to initialize payment');
       } finally {
         setIsLoading(false);
       }
@@ -82,7 +83,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
         clearInterval(pollInterval);
       }
     };
-  }, [type, amount, subscriptionId, onSuccess]);
+  }, [type, amount, subscriptionId, onSuccess, onError]);
 
   if (isLoading) {
     return (

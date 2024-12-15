@@ -10,6 +10,7 @@ interface CardPaymentFormProps {
   subscriptionId: string;
   onSuccess: () => void;
   onBack: () => void;
+  onError: (error: string) => void;
 }
 
 interface CardFormData {
@@ -25,6 +26,7 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
   subscriptionId,
   onSuccess,
   onBack,
+  onError
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [subscribe] = useSubscribeMutation();
@@ -72,7 +74,7 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
       toast.success('Payment successful!');
       onSuccess();
     } catch (error: any) {
-      toast.error(error.message || 'Payment failed');
+      onError(error.message || 'Payment failed');
     } finally {
       setIsProcessing(false);
     }
