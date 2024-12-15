@@ -59,7 +59,7 @@ const SubscriptionPage = () => {
     try {
       await refetchCurrentSubscription();
       setShowPaymentModal(false);
-      navigate("/dashboard");
+      navigate("/stores");
     } catch (error) {
       toast.error("Failed to update subscription status");
     }

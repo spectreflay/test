@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, CreditCard, Smartphone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, CreditCard, Smartphone, Check } from 'lucide-react';
 import PaymentMethodCard from '../payment/PaymentMethodCard';
 import PaymentSummary from '../payment/PaymentSummary';
 import PaymentSteps from '../payment/PaymentSteps';
@@ -15,6 +15,7 @@ interface PaymentModalProps {
 }
 
 const PAYMENT_STEPS = ['Select Method', 'Payment Details', 'Confirmation'];
+const REDIRECT_DELAY = 10; // 10 seconds countdown
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -25,6 +26,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 }) => {
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [countdown, setCountdown] = useState(REDIRECT_DELAY);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (currentStep === 2) {
+      timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            onSuccess();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [currentStep, onSuccess]);
 
   const paymentMethods = [
     {
@@ -53,9 +74,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     },
   ];
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
     setCurrentStep(2);
-    onSuccess();
+    setCountdown(REDIRECT_DELAY);
   };
 
   const handlePaymentError = (error: string) => {
@@ -132,6 +153,33 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   onError={handlePaymentError}
                   onBack={handleBack}
                 />
+              )}
+
+              {currentStep === 2 && (
+                <div className="text-center space-y-6">
+                  <div className="flex items-center justify-center">
+                    <div className="bg-green-100 rounded-full p-4">
+                      <Check className="h-12 w-12 text-green-600" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">Payment Successful!</h3>
+                    <p className="mt-2 text-gray-600">
+                      Thank you for your subscription. Your payment has been processed successfully.
+                    </p>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Redirecting to dashboard in {countdown} seconds...
+                  </div>
+                  <div className="mt-6">
+                    <button
+                      onClick={onSuccess}
+                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-hover"
+                    >
+                      Go to Dashboard Now
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
 
