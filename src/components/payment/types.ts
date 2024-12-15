@@ -1,4 +1,4 @@
-export type PaymentMethod = 'card' | 'gcash' | 'grab_pay' | 'maya';
+export type PaymentMethod = 'card' | 'gcash' | 'grab_pay' | 'paymaya';
 
 export interface PaymentDetails {
   paymentId: string;

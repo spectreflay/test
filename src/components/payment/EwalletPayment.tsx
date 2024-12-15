@@ -6,7 +6,7 @@ import { createSource, getSourceStatus } from '../../utils/paymongo';
 import { useSubscribeMutation } from '../../store/services/subscriptionService';
 
 interface EWalletPaymentProps {
-  type: 'gcash' | 'grab_pay' | 'maya';
+  type: 'gcash' | 'grab_pay' | 'paymaya';
   amount: number;
   subscriptionId: string;
   onSuccess: () => void;
@@ -111,7 +111,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-xl font-semibold capitalize">{type} Payment</h2>
+        <h2 className="text-xl font-semibold capitalize">{type === 'paymaya' ? 'Maya' : type} Payment</h2>
       </div>
 
       {isDevelopment && (

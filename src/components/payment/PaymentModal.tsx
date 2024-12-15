@@ -133,9 +133,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     icon={Smartphone}
                     name="Maya"
                     description="Pay with your Maya wallet"
-                    selected={selectedMethod === "maya"}
+                    selected={selectedMethod === "paymaya"}
                     onClick={() => {
-                      setSelectedMethod("maya");
+                      setSelectedMethod("paymaya");
                       setCurrentStep(1);
                     }}
                   />
@@ -153,11 +153,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               )}
 
               {currentStep === 1 &&
-                ["gcash", "grab_pay", "maya"].includes(
+                ["gcash", "grab_pay", "paymaya"].includes(
                   selectedMethod || ""
                 ) && (
                   <EWalletPayment
-                    type={selectedMethod as "gcash" | "grab_pay" | "maya"}
+                    type={selectedMethod as "gcash" | "grab_pay" | "paymaya"}
                     amount={amount}
                     subscriptionId={subscriptionId}
                     onSuccess={handlePaymentSuccess}

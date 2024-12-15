@@ -13,14 +13,17 @@ const paymongoAxios = axios.create({
   },
 });
 
-export const createSource = async (amount: number, type: 'gcash' | 'grab_pay' | 'maya') => {
+export const createSource = async (amount: number, type: 'gcash' | 'grab_pay' | 'paymaya') => {
   try {
+    // Convert type 'paymaya' to 'paymaya' for the API
+    const sourceType = type === 'paymaya' ? 'paymaya' : type;
+    
     const response = await paymongoAxios.post('/sources', {
       data: {
         attributes: {
           amount: Math.round(amount * 100), // Convert to cents
           currency: 'PHP',
-          type,
+          type: sourceType,
           redirect: {
             success: `${window.location.origin}/subscription?status=success&payment_id={id}`,
             failed: `${window.location.origin}/subscription?status=failed`,
