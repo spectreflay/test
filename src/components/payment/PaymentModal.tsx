@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Smartphone, Check } from 'lucide-react';
-import PaymentMethodCard from '../payment/PaymentMethodCard';
-import PaymentSummary from '../payment/PaymentSummary';
-import PaymentSteps from '../payment/PaymentSteps';
-import CardPaymentForm from '../payment/CardPaymentForm';
-import EWalletPayment from '../payment/EwalletPayment';
+import React, { useState, useEffect } from "react";
+import { X, CreditCard, Smartphone, Check } from "lucide-react";
+import PaymentMethodCard from "../payment/PaymentMethodCard";
+import PaymentSummary from "../payment/PaymentSummary";
+import PaymentSteps from "../payment/PaymentSteps";
+import CardPaymentForm from "../payment/CardPaymentForm";
+import EWalletPayment from "../payment/EwalletPayment";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ interface PaymentModalProps {
   onSuccess: () => void;
 }
 
-const PAYMENT_STEPS = ['Select Method', 'Payment Details', 'Confirmation'];
+const PAYMENT_STEPS = ["Select Method", "Payment Details", "Confirmation"];
 const REDIRECT_DELAY = 10; // 10 seconds countdown
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
@@ -27,6 +27,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [countdown, setCountdown] = useState(REDIRECT_DELAY);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -35,7 +36,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-            onSuccess();
+            setShouldRedirect(true);
             return 0;
           }
           return prev - 1;
@@ -45,34 +46,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [currentStep, onSuccess]);
+  }, [currentStep]);
 
-  const paymentMethods = [
-    {
-      id: 'card',
-      name: 'Credit/Debit Card',
-      description: 'Pay securely with your card',
-      icon: CreditCard,
-    },
-    {
-      id: 'gcash',
-      name: 'GCash',
-      description: 'Pay with your GCash wallet',
-      icon: Smartphone,
-    },
-    {
-      id: 'grab_pay',
-      name: 'GrabPay',
-      description: 'Pay with your GrabPay wallet',
-      icon: Smartphone,
-    },
-    {
-      id: 'maya',
-      name: 'Maya',
-      description: 'Pay with your Maya wallet',
-      icon: Smartphone,
-    },
-  ];
+  useEffect(() => {
+    if (shouldRedirect) {
+      onSuccess();
+    }
+  }, [shouldRedirect, onSuccess]);
 
   const handlePaymentSuccess = async () => {
     setCurrentStep(2);
@@ -80,7 +60,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const handlePaymentError = (error: string) => {
-    console.error('Payment error:', error);
     setSelectedMethod(null);
     setCurrentStep(0);
   };
@@ -101,7 +80,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       <div className="bg-white rounded-lg max-w-3xl w-full m-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-900">Complete Payment</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Complete Payment
+            </h2>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-full"
@@ -118,23 +99,50 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             <div>
               {currentStep === 0 && (
                 <div className="space-y-4">
-                  {paymentMethods.map((method) => (
-                    <PaymentMethodCard
-                      key={method.id}
-                      icon={method.icon}
-                      name={method.name}
-                      description={method.description}
-                      selected={selectedMethod === method.id}
-                      onClick={() => {
-                        setSelectedMethod(method.id);
-                        setCurrentStep(1);
-                      }}
-                    />
-                  ))}
+                  <PaymentMethodCard
+                    icon={CreditCard}
+                    name="Credit/Debit Card"
+                    description="Pay securely with your card"
+                    selected={selectedMethod === "card"}
+                    onClick={() => {
+                      setSelectedMethod("card");
+                      setCurrentStep(1);
+                    }}
+                  />
+                  <PaymentMethodCard
+                    icon={Smartphone}
+                    name="GCash"
+                    description="Pay with your GCash wallet"
+                    selected={selectedMethod === "gcash"}
+                    onClick={() => {
+                      setSelectedMethod("gcash");
+                      setCurrentStep(1);
+                    }}
+                  />
+                  <PaymentMethodCard
+                    icon={Smartphone}
+                    name="GrabPay"
+                    description="Pay with your GrabPay wallet"
+                    selected={selectedMethod === "grab_pay"}
+                    onClick={() => {
+                      setSelectedMethod("grab_pay");
+                      setCurrentStep(1);
+                    }}
+                  />
+                  <PaymentMethodCard
+                    icon={Smartphone}
+                    name="Maya"
+                    description="Pay with your Maya wallet"
+                    selected={selectedMethod === "maya"}
+                    onClick={() => {
+                      setSelectedMethod("maya");
+                      setCurrentStep(1);
+                    }}
+                  />
                 </div>
               )}
 
-              {currentStep === 1 && selectedMethod === 'card' && (
+              {currentStep === 1 && selectedMethod === "card" && (
                 <CardPaymentForm
                   amount={amount}
                   subscriptionId={subscriptionId}
@@ -144,16 +152,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 />
               )}
 
-              {currentStep === 1 && ['gcash', 'grab_pay', 'maya'].includes(selectedMethod || '') && (
-                <EWalletPayment
-                  type={selectedMethod as 'gcash' | 'grab_pay' | 'maya'}
-                  amount={amount}
-                  subscriptionId={subscriptionId}
-                  onSuccess={handlePaymentSuccess}
-                  onError={handlePaymentError}
-                  onBack={handleBack}
-                />
-              )}
+              {currentStep === 1 &&
+                ["gcash", "grab_pay", "maya"].includes(
+                  selectedMethod || ""
+                ) && (
+                  <EWalletPayment
+                    type={selectedMethod as "gcash" | "grab_pay" | "maya"}
+                    amount={amount}
+                    subscriptionId={subscriptionId}
+                    onSuccess={handlePaymentSuccess}
+                    onError={handlePaymentError}
+                    onBack={handleBack}
+                  />
+                )}
 
               {currentStep === 2 && (
                 <div className="text-center space-y-6">
@@ -163,9 +174,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-900">Payment Successful!</h3>
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      Payment Successful!
+                    </h3>
                     <p className="mt-2 text-gray-600">
-                      Thank you for your subscription. Your payment has been processed successfully.
+                      Thank you for your subscription. Your payment has been
+                      processed successfully.
                     </p>
                   </div>
                   <div className="text-sm text-gray-500">
@@ -173,7 +187,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
                   <div className="mt-6">
                     <button
-                      onClick={onSuccess}
+                      onClick={() => setShouldRedirect(true)}
                       className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-hover"
                     >
                       Go to Dashboard Now
