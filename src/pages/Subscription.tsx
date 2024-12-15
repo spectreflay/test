@@ -8,7 +8,7 @@ import {
   useSubscribeMutation,
   useVerifySubscriptionMutation,
 } from "../store/services/subscriptionService";
-import PaymentModal from "../components/subscription/PaymentModal";
+import PaymentModal from "../components/payment/PaymentModal";
 
 const SubscriptionPage = () => {
   const { data: subscriptions } = useGetSubscriptionsQuery();
