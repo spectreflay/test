@@ -103,10 +103,15 @@ const authSlice = createSlice({
       localStorage.setItem("staff", JSON.stringify(staff));
     },
     logout: (state) => {
+      const lastLoggedInEmail = localStorage.getItem("lastLoggedInEmail");
+
       state.token = null;
       state.user = null;
       state.staff = null;
       localStorage.clear();
+      if (lastLoggedInEmail) {
+        localStorage.setItem("lastLoggedInEmail", lastLoggedInEmail);
+      }
       sessionStorage.removeItem("registrationFlow");
 
       // Reset theme to default on logout

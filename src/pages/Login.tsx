@@ -27,17 +27,26 @@ const Login = () => {
   const { token, user } = useSelector((state: RootState) => state.auth);
   const [isEmailUnverified, setIsEmailUnverified] = useState(false);
 
+  const lastLoggedInEmail = localStorage.getItem("lastLoggedInEmail");
+
   // Redirect if already logged in and email is verified
   useEffect(() => {
     if (token && user?.isEmailVerified) {
       const from = (location.state as any)?.from?.pathname || "/";
-      navigate(from, { replace: true });
+      if (user.email === lastLoggedInEmail && from) {
+        navigate(from);
+      } else {
+        navigate("/stores");
+      }
     }
-  }, [token, user?.isEmailVerified, navigate, location]);
+  }, [token, user?.isEmailVerified, navigate, location, lastLoggedInEmail]);
 
   const onSubmit = async (data: LoginForm) => {
     try {
       const response = await login(data).unwrap();
+
+      localStorage.setItem("lastLoggedInEmail", data.email);
+
       dispatch(setCredentials(response));
 
       if (!response.isEmailVerified) {
@@ -46,8 +55,12 @@ const Login = () => {
       }
 
       toast.success("Login successful!");
-      const from = (location.state as any)?.from?.pathname || "/";
-      navigate(from, { replace: true });
+      if (data.email === lastLoggedInEmail) {
+        const from = (location.state as any)?.from?.pathname || "/stores";
+        navigate(from);
+      } else {
+        navigate("/stores");
+      }
     } catch (error) {
       toast.error("Invalid email or password");
     }
