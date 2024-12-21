@@ -4,7 +4,7 @@ import { Staff } from "../services/staffService";
 import { useThemeStore } from "../ui/themeStore";
 
 interface User {
-  _id:   string;
+  _id: string;
   name: string;
   email: string;
   themePreference?: "light" | "dark" | "green" | "indigo";
@@ -103,15 +103,25 @@ const authSlice = createSlice({
       localStorage.setItem("staff", JSON.stringify(staff));
     },
     logout: (state) => {
+      const email = state.user?.email;
+      const lastLocation = email ? localStorage.getItem(`lastLocation_${email}`) : null;
       const lastLoggedInEmail = localStorage.getItem("lastLoggedInEmail");
 
       state.token = null;
       state.user = null;
       state.staff = null;
+
+      // Clear all localStorage except for the current user's last location
       localStorage.clear();
+
+      // Restore last logged in user's data
       if (lastLoggedInEmail) {
         localStorage.setItem("lastLoggedInEmail", lastLoggedInEmail);
+        if (lastLocation && email === lastLoggedInEmail) {
+          localStorage.setItem(`lastLocation_${email}`, lastLocation);
+        }
       }
+
       sessionStorage.removeItem("registrationFlow");
 
       // Reset theme to default on logout

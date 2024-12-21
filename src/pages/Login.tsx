@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setCredentials } from "../store/slices/authSlice";
 import { RootState } from "../store";
 import UnverifiedEmailAlert from "../components/auth/UnverifiedEmailAlert";
+import { clearPreviousUserData, saveUserLocation, getUserLastLocation } from "../utils/auth";
 
 interface LoginForm {
   email: string;
@@ -27,26 +28,20 @@ const Login = () => {
   const { token, user } = useSelector((state: RootState) => state.auth);
   const [isEmailUnverified, setIsEmailUnverified] = useState(false);
 
-  const lastLoggedInEmail = localStorage.getItem("lastLoggedInEmail");
-
   // Redirect if already logged in and email is verified
   useEffect(() => {
     if (token && user?.isEmailVerified) {
-      const from = (location.state as any)?.from?.pathname || "/";
-      if (user.email === lastLoggedInEmail && from) {
-        navigate(from);
-      } else {
-        navigate("/stores");
-      }
+      const redirectPath = (location.state as any)?.from?.pathname || getUserLastLocation(user.email);
+      navigate(redirectPath);
     }
-  }, [token, user?.isEmailVerified, navigate, location, lastLoggedInEmail]);
+  }, [token, user?.isEmailVerified, navigate, location]);
 
   const onSubmit = async (data: LoginForm) => {
     try {
+      // Clear previous user's data before logging in new user
+      clearPreviousUserData(data.email);
+
       const response = await login(data).unwrap();
-
-      localStorage.setItem("lastLoggedInEmail", data.email);
-
       dispatch(setCredentials(response));
 
       if (!response.isEmailVerified) {
@@ -54,13 +49,12 @@ const Login = () => {
         return;
       }
 
+      // Save new user's location and update last logged in email
+      const redirectPath = (location.state as any)?.from?.pathname || "/stores";
+      saveUserLocation(data.email, redirectPath);
+
       toast.success("Login successful!");
-      if (data.email === lastLoggedInEmail) {
-        const from = (location.state as any)?.from?.pathname || "/stores";
-        navigate(from);
-      } else {
-        navigate("/stores");
-      }
+      navigate(redirectPath);
     } catch (error) {
       toast.error("Invalid email or password");
     }
