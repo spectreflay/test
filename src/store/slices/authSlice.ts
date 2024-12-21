@@ -4,7 +4,7 @@ import { Staff } from "../services/staffService";
 import { useThemeStore } from "../ui/themeStore";
 
 interface User {
-  _id: string;
+  _id:   string;
   name: string;
   email: string;
   themePreference?: "light" | "dark" | "green" | "indigo";
@@ -23,10 +23,11 @@ const loadState = (): AuthState => {
     const user = localStorage.getItem("user");
     const staff = localStorage.getItem("staff");
 
-    // If user exists but is not verified, clear storage and return empty state
+    // If user exists but is not verified, only clear storage after registration flow is complete
     if (user) {
       const userData = JSON.parse(user);
-      if (!userData.isEmailVerified) {
+      const isRegistrationFlow = sessionStorage.getItem("registrationFlow");
+      if (!userData.isEmailVerified && !isRegistrationFlow) {
         localStorage.clear();
         return {
           token: null,
@@ -66,27 +67,26 @@ const authSlice = createSlice({
         isEmailVerified: boolean;
       }>
     ) => {
-      localStorage.clear();
       const { token, ...user } = action.payload;
-      // Only store credentials if email is verified
-      if (user.isEmailVerified) {
-        state.token = token;
-        state.user = user;
-        state.staff = null;
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user));
+      
+      // Set token and user regardless of verification status during registration
+      state.token = token;
+      state.user = user;
+      state.staff = null;
+      
+      // Store in localStorage
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
 
-        // Set theme preference
-        if (action.payload.themePreference) {
-          const setTheme = useThemeStore.getState().setTheme;
-          setTheme(action.payload.themePreference);
-        }
-      } else {
-        // Clear any existing auth state if email is not verified
-        state.token = null;
-        state.user = null;
-        state.staff = null;
-        localStorage.clear();
+      // Mark as registration flow
+      if (!user.isEmailVerified) {
+        sessionStorage.setItem("registrationFlow", "true");
+      }
+
+      // Set theme preference
+      if (action.payload.themePreference) {
+        const setTheme = useThemeStore.getState().setTheme;
+        setTheme(action.payload.themePreference);
       }
     },
     setStaffCredentials: (
@@ -94,6 +94,7 @@ const authSlice = createSlice({
       action: PayloadAction<Staff & { token: string }>
     ) => {
       localStorage.clear();
+      sessionStorage.removeItem("registrationFlow");
       const { token, ...staff } = action.payload;
       state.token = token;
       state.staff = staff;
@@ -106,6 +107,7 @@ const authSlice = createSlice({
       state.user = null;
       state.staff = null;
       localStorage.clear();
+      sessionStorage.removeItem("registrationFlow");
 
       // Reset theme to default on logout
       const setTheme = useThemeStore.getState().setTheme;
@@ -117,6 +119,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setCredentials, setStaffCredentials, logout } =
-  authSlice.actions;
+export const { setCredentials, setStaffCredentials, logout } = authSlice.actions;
 export default authSlice.reducer;

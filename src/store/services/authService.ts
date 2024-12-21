@@ -54,10 +54,13 @@ export const authApi = api.injectEndpoints({
           // First set the credentials to ensure we have the token
           dispatch(setCredentials(user));
 
+          // Create welcome notification
+          await createNotification(dispatch, getWelcomeMessage(user.name));
+
           // Get free tier subscription
           const { data: subscriptions } = await dispatch(
             subscriptionApi.endpoints.getSubscriptions.initiate(undefined, {
-              forceRefetch: true
+              forceRefetch: true,
             })
           );
 
@@ -70,20 +73,21 @@ export const authApi = api.injectEndpoints({
                 subscriptionId: freeTier._id,
                 paymentMethod: "free",
                 paymentDetails: {
-                  status: "completed"
-                }
+                  status: "completed",
+                },
               })
             ).unwrap();
 
-            // Create welcome notification
-            await createNotification(dispatch, getWelcomeMessage(user.name));
 
             // Force refetch current subscription
             await dispatch(
-              subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
-                forceRefetch: true,
-                subscribe: false
-              })
+              subscriptionApi.endpoints.getCurrentSubscription.initiate(
+                undefined,
+                {
+                  forceRefetch: true,
+                  subscribe: false,
+                }
+              )
             );
           }
         } catch (error) {
