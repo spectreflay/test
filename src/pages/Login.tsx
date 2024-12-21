@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
@@ -7,6 +7,7 @@ import { useLoginMutation } from "../store/services/authService";
 import { useDispatch, useSelector } from "react-redux";
 import { setCredentials } from "../store/slices/authSlice";
 import { RootState } from "../store";
+import UnverifiedEmailAlert from "../components/auth/UnverifiedEmailAlert";
 
 interface LoginForm {
   email: string;
@@ -23,25 +24,34 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { token } = useSelector((state: RootState) => state.auth);
+  const { token, user } = useSelector((state: RootState) => state.auth);
+  const [isEmailUnverified, setIsEmailUnverified] = useState(false);
 
-  // Redirect if already logged in
+  // Redirect if already logged in and email is verified
   useEffect(() => {
-    if (token) {
+    if (token && user?.isEmailVerified) {
       const from = (location.state as any)?.from?.pathname || "/";
       navigate(from, { replace: true });
     }
-  }, [token, navigate, location]);
+  }, [token, user?.isEmailVerified, navigate, location]);
 
   const onSubmit = async (data: LoginForm) => {
     try {
       const user = await login(data).unwrap();
+      console.log(user)
       dispatch(setCredentials(user));
-      toast.success("Login successful!");
 
-      // Navigate to the attempted URL or dashboard
-      const from = (location.state as any)?.from?.pathname || "/";
-      navigate(from, { replace: true });
+      if (!user.isEmailVerified) {
+        toast.error("Please verify your email address");
+        setIsEmailUnverified(true);
+        return;
+      }
+
+      toast.success("Login successful!");
+      // const from = (location.state as any)?.from?.pathname || "/";
+      // navigate(from, { replace: true });
+      navigate("/");
+      
     } catch (error) {
       toast.error("Invalid email or password");
     }
@@ -56,6 +66,8 @@ const Login = () => {
             Sign in to your account
           </h2>
         </div>
+        {isEmailUnverified && <UnverifiedEmailAlert />}
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="rounded-md shadow-sm space-y-4">
             <div>

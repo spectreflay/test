@@ -34,6 +34,8 @@ import { RootState } from "./store";
 import { PERMISSIONS } from "./utils/permissions";
 import NotFound from "./pages/NotFound";
 import About from "./pages/About";
+import EmailVerification from "./pages/EmailVerification";
+import ResendVerification from "./pages/ResendVerification";
 
 function App() {
   const { token, staff } = useSelector((state: RootState) => state.auth);
@@ -63,6 +65,8 @@ function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/documentation" element={<Documentation />} />
         <Route path="/About" element={<About />} />
+        <Route path="/verify-email" element={<EmailVerification />} />
+        <Route path="/resend-verification" element={<ResendVerification />} />
 
         <Route
           path="/"

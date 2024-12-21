@@ -14,6 +14,7 @@ export interface RegisterRequest {
 }
 
 export interface User {
+  isEmailVerified: any;
   _id: string;
   name: string;
   email: string;

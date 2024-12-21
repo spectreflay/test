@@ -8,6 +8,7 @@ interface User {
   name: string;
   email: string;
   themePreference?: "light" | "dark" | "green" | "indigo";
+  isEmailVerified: boolean;
 }
 
 interface AuthState {
@@ -49,6 +50,7 @@ const authSlice = createSlice({
         name: string;
         email: string;
         themePreference?: "light" | "dark" | "green" | "indigo";
+        isEmailVerified: boolean;
       }>
     ) => {
       localStorage.clear();
