@@ -37,21 +37,18 @@ const Login = () => {
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      const user = await login(data).unwrap();
-      console.log(user)
-      dispatch(setCredentials(user));
+      const response = await login(data).unwrap();
+      dispatch(setCredentials(response));
 
-      if (!user.isEmailVerified) {
-        toast.error("Please verify your email address");
+      if (!response.isEmailVerified) {
         setIsEmailUnverified(true);
+        toast.error("Please verify your email address");
         return;
       }
 
       toast.success("Login successful!");
-      // const from = (location.state as any)?.from?.pathname || "/";
-      // navigate(from, { replace: true });
-      navigate("/");
-      
+      const from = (location.state as any)?.from?.pathname || "/";
+      navigate(from, { replace: true });
     } catch (error) {
       toast.error("Invalid email or password");
     }
