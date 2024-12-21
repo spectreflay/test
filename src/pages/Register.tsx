@@ -45,8 +45,18 @@ const Register = () => {
       // Then create the notification
       await createNotification(dispatch, getWelcomeMessage(user.name));
 
-      toast.success("Registration successful!");
-      navigate("/");
+      // Show success message and redirect to verification page
+      toast.success(
+        "Registration successful! Please check your email for verification."
+      );
+      navigate("/verify-email", {
+        state: {
+          email: data.email,
+          name: data.name,
+          message:
+            "We've sent a verification link to your email address. Please check your inbox and click the link to verify your account.",
+        },
+      });
     } catch (error) {
       toast.error("Registration failed. Please try again.");
     }
@@ -165,7 +175,7 @@ const Register = () => {
             Forgot your password?
           </Link>
           <Link to="/login" className="hover:underline">
-           Already have an account? Login
+            Already have an account? Login
           </Link>
         </div>
       </div>

@@ -1,14 +1,21 @@
 import React, { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Mail, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useVerifyEmailMutation } from '../store/services/emailVerificationService';
+import { useSubscribeMutation } from '../store/services/subscriptionService';
+import { useGetSubscriptionsQuery } from '../store/services/subscriptionService';
 
 const EmailVerification = () => {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const token = searchParams.get('token');
   const navigate = useNavigate();
   const [verifyEmail, { isLoading }] = useVerifyEmailMutation();
+  const [subscribe] = useSubscribeMutation();
+  const { data: subscriptions } = useGetSubscriptionsQuery();
+
+  const { email, name, message } = location.state || {};
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -16,7 +23,20 @@ const EmailVerification = () => {
 
       try {
         await verifyEmail({ token }).unwrap();
-        toast.success('Email verified successfully!');
+        
+        // Find and apply free tier subscription
+        const freeTier = subscriptions?.find(sub => sub.name === 'free');
+        if (freeTier) {
+          await subscribe({
+            subscriptionId: freeTier._id,
+            paymentMethod: 'free',
+            paymentDetails: {
+              status: 'completed'
+            }
+          }).unwrap();
+        }
+
+        toast.success('Email verified successfully! Free tier subscription has been applied.');
         navigate('/login');
       } catch (error) {
         toast.error('Email verification failed');
@@ -24,7 +44,7 @@ const EmailVerification = () => {
     };
 
     verifyToken();
-  }, [token, verifyEmail, navigate]);
+  }, [token, verifyEmail, navigate, subscribe, subscriptions]);
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -40,9 +60,14 @@ const EmailVerification = () => {
             </p>
           ) : (
             <p className="mt-2 text-sm text-gray-600">
-              {token
+              {message || (token
                 ? 'Something went wrong with the verification.'
-                : 'Please verify your email address to continue.'}
+                : 'Please verify your email address to continue.')}
+            </p>
+          )}
+          {email && (
+            <p className="mt-2 text-sm text-gray-500">
+              Verification email sent to: <strong>{email}</strong>
             </p>
           )}
         </div>
