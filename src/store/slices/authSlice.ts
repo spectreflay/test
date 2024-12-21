@@ -69,6 +69,9 @@ const authSlice = createSlice({
     ) => {
       const { token, ...user } = action.payload;
       
+      // Clear any existing store data
+      localStorage.removeItem("selectedStoreId");
+      
       // Set token and user regardless of verification status during registration
       state.token = token;
       state.user = user;
@@ -103,25 +106,12 @@ const authSlice = createSlice({
       localStorage.setItem("staff", JSON.stringify(staff));
     },
     logout: (state) => {
-      const email = state.user?.email;
-      const lastLocation = email ? localStorage.getItem(`lastLocation_${email}`) : null;
-      const lastLoggedInEmail = localStorage.getItem("lastLoggedInEmail");
-
       state.token = null;
       state.user = null;
       state.staff = null;
 
-      // Clear all localStorage except for the current user's last location
+      // Clear all localStorage
       localStorage.clear();
-
-      // Restore last logged in user's data
-      if (lastLoggedInEmail) {
-        localStorage.setItem("lastLoggedInEmail", lastLoggedInEmail);
-        if (lastLocation && email === lastLoggedInEmail) {
-          localStorage.setItem(`lastLocation_${email}`, lastLocation);
-        }
-      }
-
       sessionStorage.removeItem("registrationFlow");
 
       // Reset theme to default on logout

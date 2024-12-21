@@ -8,7 +8,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setCredentials } from "../store/slices/authSlice";
 import { RootState } from "../store";
 import UnverifiedEmailAlert from "../components/auth/UnverifiedEmailAlert";
-import { clearPreviousUserData, saveUserLocation, getUserLastLocation } from "../utils/auth";
+import { clearPreviousUserData } from "../utils/auth";
 
 interface LoginForm {
   email: string;
@@ -28,13 +28,17 @@ const Login = () => {
   const { token, user } = useSelector((state: RootState) => state.auth);
   const [isEmailUnverified, setIsEmailUnverified] = useState(false);
 
+  // Clear any existing store-related data on component mount
+  useEffect(() => {
+    localStorage.removeItem("selectedStoreId");
+  }, []);
+
   // Redirect if already logged in and email is verified
   useEffect(() => {
     if (token && user?.isEmailVerified) {
-      const redirectPath = (location.state as any)?.from?.pathname || getUserLastLocation(user.email);
-      navigate(redirectPath);
+      navigate("/stores");
     }
-  }, [token, user?.isEmailVerified, navigate, location]);
+  }, [token, user?.isEmailVerified, navigate]);
 
   const onSubmit = async (data: LoginForm) => {
     try {
@@ -49,12 +53,8 @@ const Login = () => {
         return;
       }
 
-      // Save new user's location and update last logged in email
-      const redirectPath = (location.state as any)?.from?.pathname || "/stores";
-      saveUserLocation(data.email, redirectPath);
-
       toast.success("Login successful!");
-      navigate(redirectPath);
+      navigate("/stores");
     } catch (error) {
       toast.error("Invalid email or password");
     }
