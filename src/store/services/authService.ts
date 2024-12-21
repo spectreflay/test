@@ -4,6 +4,7 @@ import {
   getWelcomeMessage,
 } from "../../utils/notification";
 import { subscriptionApi } from "./subscriptionService";
+import { setCredentials } from "../slices/authSlice";
 
 export interface LoginRequest {
   email: string;
@@ -34,10 +35,9 @@ export const authApi = api.injectEndpoints({
         body: credentials,
       }),
       transformResponse: (response: any) => {
-        // Ensure isEmailVerified is included in the response
         return {
           ...response,
-          isEmailVerified: response.isEmailVerified ?? false, // Default to false if not provided
+          isEmailVerified: response.isEmailVerified ?? false,
         };
       },
     }),
@@ -51,25 +51,41 @@ export const authApi = api.injectEndpoints({
         try {
           const { data: user } = await queryFulfilled;
 
+          // First set the credentials to ensure we have the token
+          dispatch(setCredentials(user));
+
           // Get free tier subscription
           const { data: subscriptions } = await dispatch(
-            subscriptionApi.endpoints.getSubscriptions.initiate()
+            subscriptionApi.endpoints.getSubscriptions.initiate(undefined, {
+              forceRefetch: true
+            })
           );
 
           const freeTier = subscriptions?.find((sub) => sub.name === "free");
 
           if (freeTier) {
-            // Subscribe user to free tier
+            // Subscribe user to free tier regardless of email verification status
             await dispatch(
               subscriptionApi.endpoints.subscribe.initiate({
                 subscriptionId: freeTier._id,
                 paymentMethod: "free",
+                paymentDetails: {
+                  status: "completed"
+                }
+              })
+            ).unwrap();
+
+            // Create welcome notification
+            await createNotification(dispatch, getWelcomeMessage(user.name));
+
+            // Force refetch current subscription
+            await dispatch(
+              subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
+                forceRefetch: true,
+                subscribe: false
               })
             );
           }
-
-          // Create welcome notification
-          await createNotification(dispatch, getWelcomeMessage(user.name));
         } catch (error) {
           console.error("Error in register:", error);
         }
