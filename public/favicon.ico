@@ -1,0 +1,1 @@
+<command>convert public/favicon.svg -define icon:auto-resize=64,48,32,16 public/favicon.ico</command>

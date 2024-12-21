@@ -1,0 +1,1 @@
+<command>convert public/favicon.svg -resize 180x180 public/apple-touch-icon.png</command>

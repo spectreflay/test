@@ -42,7 +42,6 @@ const Login = () => {
 
       if (!response.isEmailVerified) {
         setIsEmailUnverified(true);
-        toast.error("Please verify your email address");
         return;
       }
 
