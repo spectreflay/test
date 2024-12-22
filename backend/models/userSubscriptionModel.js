@@ -29,6 +29,11 @@ const userSubscriptionSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  billingCycle: {
+    type: String,
+    enum: ['monthly', 'yearly'],
+    required: true
+  },
   paymentMethod: {
     type: String,
     enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay']
