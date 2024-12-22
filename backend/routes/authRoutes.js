@@ -2,12 +2,20 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import { protect } from "../middleware/authMiddleware.js";
-import { sendVerificationEmail } from "../utils/emailService.js";
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from "../utils/emailService.js";
 import {
   generateVerificationToken,
   createVerificationLink,
 } from "../utils/verificationUtils.js";
 import VerificationToken from "../models/verificationTokenModel.js";
+import {
+  createResetLink,
+  generateResetToken,
+  verifyResetToken,
+} from "../utils/generateTokenLinkUtils.js";
 
 const router = express.Router();
 
@@ -130,6 +138,50 @@ router.post("/send-verification", protect, async (req, res) => {
     res.json({
       success: true,
       message: "Verification email sent successfully",
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const resetToken = await generateResetToken(user._id);
+    const resetLink = createResetLink(resetToken);
+    await sendPasswordResetEmail(user.email, user.name, resetLink);
+
+    res.json({
+      success: true,
+      message: "Password reset email sent successfully",
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    const resetToken = await verifyResetToken(token);
+    const user = resetToken.user;
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    // Delete the used token
+    await resetToken.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Password reset successful",
     });
   } catch (error) {
     res.status(400).json({ message: error.message });
