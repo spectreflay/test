@@ -14,8 +14,8 @@ interface SubscriptionHistoryProps {
     action: 'subscribed' | 'cancelled' | 'billing_cycle_changed';
     reason?: string;
     billingCycle: 'monthly' | 'yearly';
-    startDate: string;
-    endDate: string;
+    startDate?: string;
+    endDate?: string;
     autoRenew: boolean;
     paymentMethod: string;
     paymentDetails?: {
@@ -55,6 +55,15 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
     }
   };
 
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      return format(new Date(dateString), 'MMM dd, yyyy');
+    } catch (error) {
+      return 'N/A';
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -87,7 +96,7 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
               {history.map((item) => (
                 <tr key={item._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {format(new Date(item.createdAt), 'MMM dd, yyyy HH:mm')}
+                    {formatDate(item.createdAt)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm font-medium text-gray-900 capitalize">
@@ -111,9 +120,9 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {format(new Date(item.startDate), 'MMM dd, yyyy')} -
+                      {formatDate(item.startDate)} -
                       <br />
-                      {format(new Date(item.endDate), 'MMM dd, yyyy')}
+                      {formatDate(item.endDate)}
                     </div>
                     <span className={`text-xs ${item.autoRenew ? 'text-green-600' : 'text-gray-500'}`}>
                       {item.autoRenew ? 'Auto-renew enabled' : 'Auto-renew disabled'}
@@ -121,7 +130,7 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-900">
-                      {formatPaymentMethod(item.paymentMethod)}
+                      {item.paymentMethod ? formatPaymentMethod(item.paymentMethod) : 'N/A'}
                     </span>
                     {item.paymentDetails?.amount && (
                       <p className="text-xs text-gray-500">

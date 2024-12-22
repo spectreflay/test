@@ -20,12 +20,15 @@ const subscriptionHistorySchema = new mongoose.Schema({
   billingCycle: {
     type: String,
     enum: ['monthly', 'yearly'],
+    required: true
   },
   startDate: {
     type: Date,
+    required: true
   },
   endDate: {
     type: Date,
+    required: true
   },
   autoRenew: {
     type: Boolean,
@@ -34,6 +37,7 @@ const subscriptionHistorySchema = new mongoose.Schema({
   paymentMethod: {
     type: String,
     enum: ['card', 'gcash', 'grab_pay', 'maya', 'free'],
+    required: true
   },
   paymentDetails: {
     paymentId: String,
