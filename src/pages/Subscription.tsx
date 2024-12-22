@@ -24,15 +24,35 @@ const SubscriptionPage = () => {
   const location = useLocation();
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
+    "monthly"
+  );
   const [showHistory, setShowHistory] = useState(false);
 
   // Calculate price based on billing cycle
   const calculatePrice = (subscription: any) => {
-    if (billingCycle === 'yearly') {
+    if (billingCycle === "yearly") {
       return subscription.yearlyPrice.toFixed(2);
     }
     return subscription.monthlyPrice.toFixed(2);
+  };
+
+  const calculatePriceDisplay = (subscription: any) => {
+    const originalPrice =
+      billingCycle === "yearly"
+        ? subscription.monthlyPrice * 12 // Show annual price without discount
+        : subscription.monthlyPrice;
+
+    const discountedPrice =
+      billingCycle === "yearly"
+        ? subscription.yearlyPrice // Already discounted
+        : subscription.monthlyPrice;
+
+    return {
+      original: originalPrice.toFixed(2),
+      discounted: discountedPrice.toFixed(2),
+      hasDiscount: billingCycle === "yearly",
+    };
   };
 
   // Handle payment status from URL parameters
@@ -43,7 +63,7 @@ const SubscriptionPage = () => {
 
     if (status === "success" && paymentId) {
       handlePaymentVerification(paymentId);
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         window.close();
       }
     } else if (status === "failed") {
@@ -85,10 +105,14 @@ const SubscriptionPage = () => {
 
   const getTierLevel = (planName?: string) => {
     switch (planName) {
-      case 'premium': return 3;
-      case 'basic': return 2;
-      case 'free': return 1;
-      default: return 0;
+      case "premium":
+        return 3;
+      case "basic":
+        return 2;
+      case "free":
+        return 1;
+      default:
+        return 0;
     }
   };
 
@@ -149,20 +173,18 @@ const SubscriptionPage = () => {
             {subscriptions?.map((subscription) => {
               const isCurrentPlan =
                 currentSubscription?.subscription._id === subscription._id;
-              const price = calculatePrice(subscription);
+              const priceDisplay = calculatePriceDisplay(subscription);
 
               return (
                 <div
                   key={subscription._id}
                   className={`bg-white border-2 rounded-lg shadow-sm divide-y divide-gray-200 ${
-                    isCurrentPlan ? 'border-primary' : 'border-gray-200'
+                    isCurrentPlan ? "border-primary" : "border-gray-200"
                   }`}
                 >
                   <div className="p-6">
                     <h3 className="text-lg font-medium text-gray-900 flex justify-between">
-                      <span className="capitalize">
-                        {subscription.name}
-                      </span>
+                      <span className="capitalize">{subscription.name}</span>
                       {isCurrentPlan && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           Current Plan
@@ -177,14 +199,26 @@ const SubscriptionPage = () => {
                         ? "small businesses"
                         : "growing businesses"}
                     </p>
-                    <p className="mt-8">
-                      <span className="text-4xl font-extrabold text-gray-900">
-                        ${price}
-                      </span>
-                      <span className="text-base font-medium text-gray-500">
-                        /{billingCycle}
-                      </span>
-                    </p>
+                    <div className="mt-8">
+                      {priceDisplay.hasDiscount && (
+                        <span className="text-lg line-through text-gray-400 block">
+                          ${priceDisplay.original}
+                        </span>
+                      )}
+                      <div className="flex items-baseline">
+                        <span className="text-4xl font-extrabold text-gray-900">
+                          ${priceDisplay.discounted}
+                        </span>
+                        <span className="text-base font-medium text-gray-500">
+                          /{billingCycle}
+                        </span>
+                      </div>
+                      {billingCycle === "yearly" && (
+                        <span className="text-sm text-green-600 mt-1 block">
+                          Save 20% with annual billing
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={() => handleSubscribe(subscription)}
                       disabled={isCurrentPlan}
@@ -207,7 +241,8 @@ const SubscriptionPage = () => {
                           <Check className="h-5 w-5" />
                         </span>
                         <span className="ml-3 text-sm text-gray-700">
-                          Up to {subscription.maxProducts.toLocaleString()} products
+                          Up to {subscription.maxProducts.toLocaleString()}{" "}
+                          products
                         </span>
                       </li>
                       <li className="flex items-start">
@@ -215,7 +250,8 @@ const SubscriptionPage = () => {
                           <Check className="h-5 w-5" />
                         </span>
                         <span className="ml-3 text-sm text-gray-700">
-                          Up to {subscription.maxStaff.toLocaleString()} staff members
+                          Up to {subscription.maxStaff.toLocaleString()} staff
+                          members
                         </span>
                       </li>
                       <li className="flex items-start">
@@ -249,9 +285,11 @@ const SubscriptionPage = () => {
             isOpen={showPaymentModal}
             onClose={() => setShowPaymentModal(false)}
             subscriptionId={selectedPlan._id}
-            amount={billingCycle === 'yearly' 
-              ? selectedPlan.yearlyPrice 
-              : selectedPlan.monthlyPrice}
+            amount={
+              billingCycle === "yearly"
+                ? selectedPlan.yearlyPrice
+                : selectedPlan.monthlyPrice
+            }
             onSuccess={handlePaymentSuccess}
             billingCycle={billingCycle}
           />
@@ -259,11 +297,12 @@ const SubscriptionPage = () => {
 
         {showHistory && subscriptionHistory && (
           <SubscriptionHistory
-            history={subscriptionHistory.map(history => ({
+            history={subscriptionHistory.map((history) => ({
               ...history,
-              amount: history.billingCycle === 'yearly' 
-                ? history.subscription.yearlyPrice 
-                : history.subscription.monthlyPrice
+              amount:
+                history.billingCycle === "yearly"
+                  ? history.subscription.yearlyPrice
+                  : history.subscription.monthlyPrice,
             }))}
             onClose={() => setShowHistory(false)}
           />
