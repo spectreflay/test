@@ -80,16 +80,15 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
     };
 
     initializePayment();
-
     return () => {
       if (pollInterval) {
         clearInterval(pollInterval);
       }
     };
-  }, [type, amount, subscriptionId, billingCycle,onSuccess, onError]);
+  }, [type, amount, subscriptionId, billingCycle,onSuccess, onError,subscribe]);
 
   if (isLoading) {
-    return (
+    return (  
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         <p className="mt-4 text-gray-600">Initializing payment...</p>

@@ -47,6 +47,7 @@ router.get('/history', protect, async (req, res) => {
 router.post('/subscribe', protect, async (req, res) => {
   try {
     const { subscriptionId, paymentMethod, paymentDetails, billingCycle = 'monthly' } = req.body;
+    console.log(billingCycle,'billingCycle')
 
     // Get current subscription if exists
     const currentSubscription = await UserSubscription.findOne({
@@ -84,7 +85,6 @@ router.post('/subscribe', protect, async (req, res) => {
     } else {
       endDate.setMonth(endDate.getMonth() + 1);
     }
-
     // Create new subscription
     const userSubscription = await UserSubscription.create({
       user: req.user._id,

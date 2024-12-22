@@ -72,12 +72,12 @@ export const authApi = api.injectEndpoints({
               subscriptionApi.endpoints.subscribe.initiate({
                 subscriptionId: freeTier._id,
                 paymentMethod: "free",
+                billingCycle: "monthly", // Add default billing cycle
                 paymentDetails: {
                   status: "completed",
                 },
               })
             ).unwrap();
-
 
             // Force refetch current subscription
             await dispatch(

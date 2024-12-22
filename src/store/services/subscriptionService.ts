@@ -19,6 +19,7 @@ export interface UserSubscription {
   startDate: string;
   endDate: string;
   autoRenew: boolean;
+  billingCycle: "monthly" | "yearly";
   paymentMethod: string;
   paymentDetails?: {
     paymentId?: string;
@@ -120,7 +121,6 @@ export const subscriptionApi = api.injectEndpoints({
       query: () => "subscriptions/history",
       providesTags: ["SubscriptionHistory"],
     }),
-
     changeBillingCycle: builder.mutation<
       UserSubscription,
       { billingCycle: "monthly" | "yearly" }
