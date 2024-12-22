@@ -30,6 +30,7 @@ export interface UserSubscription {
 export interface SubscribeRequest {
   subscriptionId: string;
   paymentMethod: string;
+  billingCycle: "monthly" | "yearly";
   paymentDetails?: {
     paymentId?: string;
     amount?: number;

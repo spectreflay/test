@@ -148,6 +148,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 <CardPaymentForm
                   amount={amount}
                   subscriptionId={subscriptionId}
+                  billingCycle={billingCycle}
                   onSuccess={handlePaymentSuccess}
                   onError={handlePaymentError}
                   onBack={handleBack}
@@ -162,6 +163,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     type={selectedMethod as "gcash" | "grab_pay" | "paymaya"}
                     amount={amount}
                     subscriptionId={subscriptionId}
+                    billingCycle={billingCycle}
                     onSuccess={handlePaymentSuccess}
                     onError={handlePaymentError}
                     onBack={handleBack}

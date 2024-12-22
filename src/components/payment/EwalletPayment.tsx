@@ -9,6 +9,7 @@ interface EWalletPaymentProps {
   type: 'gcash' | 'grab_pay' | 'paymaya';
   amount: number;
   subscriptionId: string;
+  billingCycle: 'monthly' | 'yearly';
   onSuccess: () => void;
   onError: (error: string) => void;
   onBack: () => void;
@@ -18,6 +19,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
   type,
   amount,
   subscriptionId,
+  billingCycle,
   onSuccess,
   onError,
   onBack
@@ -45,6 +47,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
               await subscribe({
                 subscriptionId,
                 paymentMethod: type,
+                billingCycle,
                 paymentDetails: {
                   paymentId: source.id,
                   amount,
@@ -83,7 +86,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
         clearInterval(pollInterval);
       }
     };
-  }, [type, amount, subscriptionId, onSuccess, onError]);
+  }, [type, amount, subscriptionId, billingCycle,onSuccess, onError]);
 
   if (isLoading) {
     return (

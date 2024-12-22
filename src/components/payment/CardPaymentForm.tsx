@@ -8,6 +8,7 @@ import { useSubscribeMutation } from '../../store/services/subscriptionService';
 interface CardPaymentFormProps {
   amount: number;
   subscriptionId: string;
+  billingCycle: 'monthly' | 'yearly';
   onSuccess: () => void;
   onBack: () => void;
   onError: (error: string) => void;
@@ -24,6 +25,7 @@ interface CardFormData {
 const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
   amount,
   subscriptionId,
+  billingCycle,
   onSuccess,
   onBack,
   onError
@@ -64,6 +66,7 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
       await subscribe({
         subscriptionId,
         paymentMethod: 'card',
+        billingCycle,
         paymentDetails: {
           paymentId: paymentIntent.id,
           amount,
