@@ -134,7 +134,7 @@ export const generatePasswordResetEmail = (name, resetLink) => {
               <h2>Hello ${capitalizeName(name)},</h2>
               <p>We received a request to reset your password. Click the button below to create a new password:</p>
               <div style="text-align: center;">
-                <a href="${resetLink}" class="button" style="color:white;">Verify Email Address</a>
+                <a href="${resetLink}" class="button" style="color:white;">Reset Password</a>
               </div>
               <p style="text-align: center;">This verification link will expire in 24 hours.</p>
               <p style="text-align: center;">If you did not create an account, please ignore this email.</p>

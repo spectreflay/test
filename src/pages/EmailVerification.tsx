@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Mail, ArrowLeft, RefreshCw } from 'lucide-react';
@@ -14,13 +14,13 @@ const EmailVerification = () => {
   const [verifyEmail, { isLoading }] = useVerifyEmailMutation();
   const [subscribe] = useSubscribeMutation();
   const { data: subscriptions } = useGetSubscriptionsQuery();
-
   const { email, name, message } = location.state || {};
+  const [hasVerified, setHasVerified] = useState(false);
 
   useEffect(() => {
     const verifyToken = async () => {
-      if (!token) return;
-
+      if (!token || hasVerified) return;
+      setHasVerified(true);
       try {
         await verifyEmail({ token }).unwrap();
         
@@ -36,7 +36,7 @@ const EmailVerification = () => {
           }).unwrap();
         }
 
-        toast.success('Email verified successfully! Free tier subscription has been applied.');
+        toast.success('Email verified successfully!');
         navigate('/login');
       } catch (error) {
         toast.error('Email verification failed');
@@ -44,7 +44,7 @@ const EmailVerification = () => {
     };
 
     verifyToken();
-  }, [token, verifyEmail, navigate, subscribe, subscriptions]);
+  }, [token, verifyEmail, subscribe, subscriptions,hasVerified]);
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
