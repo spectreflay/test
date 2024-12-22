@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Check, Store, X } from 'lucide-react';
+import { Store, X, History, Check } from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
   useGetSubscriptionsQuery,
@@ -9,6 +9,8 @@ import {
   useVerifySubscriptionMutation,
 } from "../store/services/subscriptionService";
 import PaymentModal from "../components/payment/PaymentModal";
+import BillingCycleToggle from "../components/subscription/BillingCycleToggle";
+import SubscriptionHistory from "../components/subscription/SubscriptionHistory";
 
 const SubscriptionPage = () => {
   const { data: subscriptions } = useGetSubscriptionsQuery();
@@ -20,6 +22,29 @@ const SubscriptionPage = () => {
   const location = useLocation();
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Mock subscription history data - replace with actual data from your API
+  const subscriptionHistory = [
+    {
+      subscriptionName: currentSubscription?.subscription.name || 'free',
+      startDate: currentSubscription?.startDate || new Date().toISOString(),
+      endDate: currentSubscription?.endDate || new Date().toISOString(),
+      status: currentSubscription?.status || 'active',
+      amount: currentSubscription?.subscription.price || 0,
+      paymentMethod: currentSubscription?.paymentMethod || 'free',
+    },
+  ];
+
+  // Calculate price based on billing cycle
+  const calculatePrice = (basePrice: number) => {
+    if (billingCycle === 'yearly') {
+      // 20% discount for yearly billing
+      return (basePrice * 12 * 0.8).toFixed(2);
+    }
+    return basePrice.toFixed(2);
+  };
 
   // Handle payment status from URL parameters
   useEffect(() => {
@@ -29,7 +54,6 @@ const SubscriptionPage = () => {
 
     if (status === "success" && paymentId) {
       handlePaymentVerification(paymentId);
-      // Add this block to close the window
       if (typeof window !== 'undefined') {
         window.close();
       }
@@ -69,17 +93,6 @@ const SubscriptionPage = () => {
     }
   };
 
-  const renderFeature = (included: boolean, feature: string) => (
-    <div className="flex items-center space-x-2">
-      {included ? (
-        <Check className="h-5 w-5 text-green-500" />
-      ) : (
-        <X className="h-5 w-5 text-red-500" />
-      )}
-      <span>{feature}</span>
-    </div>
-  );
-
   return (
     <>
       <nav className="bg-white shadow-sm">
@@ -92,6 +105,13 @@ const SubscriptionPage = () => {
               </span>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowHistory(true)}
+                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900"
+              >
+                <History className="h-5 w-5" />
+                History
+              </button>
               <Link
                 to="/stores"
                 className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-hover"
@@ -102,6 +122,7 @@ const SubscriptionPage = () => {
           </div>
         </div>
       </nav>
+
       <div className="py-12 bg-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
@@ -113,20 +134,31 @@ const SubscriptionPage = () => {
             </p>
           </div>
 
+          <BillingCycleToggle cycle={billingCycle} onChange={setBillingCycle} />
+
           <div className="mt-12 space-y-4 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-3 sm:gap-6 lg:max-w-4xl lg:mx-auto xl:max-w-none xl:mx-0">
             {subscriptions?.map((subscription) => {
               const isCurrentPlan =
                 currentSubscription?.subscription._id === subscription._id;
+              const price = calculatePrice(subscription.price);
 
               return (
                 <div
                   key={subscription._id}
-                  className="bg-white border border-gray-200 rounded-lg shadow-sm divide-y divide-gray-200"
+                  className={`bg-white border-2 rounded-lg shadow-sm divide-y divide-gray-200 ${
+                    isCurrentPlan ? 'border-primary' : 'border-gray-200'
+                  }`}
                 >
                   <div className="p-6">
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {subscription.name.charAt(0).toUpperCase() +
-                        subscription.name.slice(1)}
+                    <h3 className="text-lg font-medium text-gray-900 flex justify-between">
+                      <span className="capitalize">
+                        {subscription.name}
+                      </span>
+                      {isCurrentPlan && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Current Plan
+                        </span>
+                      )}
                     </h3>
                     <p className="mt-4 text-sm text-gray-500">
                       Perfect for{" "}
@@ -138,10 +170,10 @@ const SubscriptionPage = () => {
                     </p>
                     <p className="mt-8">
                       <span className="text-4xl font-extrabold text-gray-900">
-                        ${subscription.price}
+                        ${price}
                       </span>
                       <span className="text-base font-medium text-gray-500">
-                        /{subscription.billingCycle}
+                        /{billingCycle}
                       </span>
                     </p>
                     <button
@@ -161,30 +193,38 @@ const SubscriptionPage = () => {
                       What's included
                     </h4>
                     <ul className="mt-6 space-y-4">
-                      <li>
-                        {renderFeature(
-                          true,
-                          `Up to ${subscription.maxProducts} products`
-                        )}
+                      <li className="flex items-start">
+                        <span className="text-green-500 flex-shrink-0">
+                          <Check className="h-5 w-5" />
+                        </span>
+                        <span className="ml-3 text-sm text-gray-700">
+                          Up to {subscription.maxProducts.toLocaleString()} products
+                        </span>
                       </li>
-                      <li>
-                        {renderFeature(
-                          true,
-                          `Up to ${subscription.maxStaff} staff members`
-                        )}
+                      <li className="flex items-start">
+                        <span className="text-green-500 flex-shrink-0">
+                          <Check className="h-5 w-5" />
+                        </span>
+                        <span className="ml-3 text-sm text-gray-700">
+                          Up to {subscription.maxStaff.toLocaleString()} staff members
+                        </span>
                       </li>
-                      <li>
-                        {renderFeature(
-                          true,
-                          `Up to ${subscription.maxStores} stores`
-                        )}
+                      <li className="flex items-start">
+                        <span className="text-green-500 flex-shrink-0">
+                          <Check className="h-5 w-5" />
+                        </span>
+                        <span className="ml-3 text-sm text-gray-700">
+                          Up to {subscription.maxStores.toLocaleString()} stores
+                        </span>
                       </li>
                       {subscription.features.map((feature) => (
-                        <li key={feature}>
-                          {renderFeature(
-                            true,
-                            feature.split("_").join(" ").toUpperCase()
-                          )}
+                        <li key={feature} className="flex items-start">
+                          <span className="text-green-500 flex-shrink-0">
+                            <Check className="h-5 w-5" />
+                          </span>
+                          <span className="ml-3 text-sm text-gray-700">
+                            {feature.split("_").join(" ").toUpperCase()}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -200,8 +240,17 @@ const SubscriptionPage = () => {
             isOpen={showPaymentModal}
             onClose={() => setShowPaymentModal(false)}
             subscriptionId={selectedPlan._id}
-            amount={selectedPlan.price}
+            amount={billingCycle === 'yearly' 
+              ? selectedPlan.price * 12 * 0.8 
+              : selectedPlan.price}
             onSuccess={handlePaymentSuccess}
+          />
+        )}
+
+        {showHistory && (
+          <SubscriptionHistory
+            history={subscriptionHistory}
+            onClose={() => setShowHistory(false)}
           />
         )}
       </div>
@@ -210,4 +259,3 @@ const SubscriptionPage = () => {
 };
 
 export default SubscriptionPage;
-

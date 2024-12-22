@@ -27,7 +27,8 @@ export const api = createApi({
     "User",
     "Inventory",
     "Subscriptions",
-    "CurrentSubscription"
+    "CurrentSubscription",
+    "SubscriptionHistory"
   ],
   keepUnusedDataFor: 0, // Immediately remove unused data
 });

@@ -38,6 +38,7 @@ import EmailVerification from "./pages/EmailVerification";
 import ResendVerification from "./pages/ResendVerification";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import SubscriptionHistory from "./pages/SubscriptionHistory";
 
 function App() {
   const { token, staff } = useSelector((state: RootState) => state.auth);
@@ -63,6 +64,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
         <Route path="/subscription" element={<Subscription />} />
+        <Route path="/subscription/history" element={<SubscriptionHistory />} />
         <Route path="/faq" element={<FAQ />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/documentation" element={<Documentation />} />
