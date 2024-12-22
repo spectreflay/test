@@ -27,6 +27,18 @@ export interface StaffLoginRequest {
   password: string;
 }
 
+export interface UpdateStaffPasswordRequest {
+  _id: string;
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface UpdateStaffProfileRequest {
+  _id: string;
+  name: string;
+  email: string;
+}
+
 export const staffApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getStaff: builder.query<Staff[], string>({
@@ -49,6 +61,21 @@ export const staffApi = api.injectEndpoints({
       }),
       invalidatesTags: ["Staff"],
     }),
+    updateStaffProfile: builder.mutation<Staff, UpdateStaffProfileRequest>({
+      query: ({ _id, ...data }) => ({
+        url: `staff/${_id}/profile`,
+        method: "PUT",
+        body: data,
+      }),
+      invalidatesTags: ["Staff"],
+    }),
+    updateStaffPassword: builder.mutation<void, UpdateStaffPasswordRequest>({
+      query: ({ _id, ...data }) => ({
+        url: `staff/${_id}/password`,
+        method: "PUT",
+        body: data,
+      }),
+    }),
     deleteStaff: builder.mutation<void, string>({
       query: (id) => ({
         url: `staff/${id}`,
@@ -70,6 +97,8 @@ export const {
   useGetStaffQuery,
   useCreateStaffMutation,
   useUpdateStaffMutation,
+  useUpdateStaffProfileMutation,
+  useUpdateStaffPasswordMutation,
   useDeleteStaffMutation,
   useStaffLoginMutation,
 } = staffApi;

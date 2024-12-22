@@ -7,8 +7,10 @@ import {
   useDeleteAccountMutation,
   useUpdateThemeMutation,
 } from "../../store/services/userService";
+import { useUpdateStaffPasswordMutation } from "../../store/services/staffService";
 import { useThemeStore } from "../../store/ui/themeStore";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "../../store";
 import { logout } from "../../store/slices/authSlice";
 import { useNavigate } from "react-router-dom";
 import DeleteAccountModal from "./../profile/DeleteAccountModal";
@@ -21,12 +23,14 @@ interface PasswordForm {
 
 const UserSettings = () => {
   const { theme, setTheme } = useThemeStore();
-  const [updatePassword] = useUpdatePasswordMutation();
+  const [updateUserPassword] = useUpdatePasswordMutation();
+  const [updateStaffPassword] = useUpdateStaffPasswordMutation();
   const [updateTheme, { isLoading: isThemeUpdating }] = useUpdateThemeMutation();
   const [deleteAccount] = useDeleteAccountMutation();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { user, staff } = useSelector((state: RootState) => state.auth);
 
   const {
     register,
@@ -42,10 +46,18 @@ const UserSettings = () => {
     }
 
     try {
-      await updatePassword({
-        currentPassword: data.currentPassword,
-        newPassword: data.newPassword,
-      }).unwrap();
+      if (user) {
+        await updateUserPassword({
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword,
+        }).unwrap();
+      } else if (staff) {
+        await updateStaffPassword({
+          _id: staff._id,
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword,
+        }).unwrap();
+      }
       toast.success("Password updated successfully");
       reset();
     } catch (error) {
@@ -55,7 +67,9 @@ const UserSettings = () => {
 
   const handleThemeChange = async (newTheme: "light" | "dark" | "green" | "indigo") => {
     try {
-      await updateTheme({ themePreference: newTheme }).unwrap();
+      if (user) {
+        await updateTheme({ themePreference: newTheme }).unwrap();
+      }
       setTheme(newTheme);
       toast.success("Theme updated successfully");
     } catch (error) {
@@ -65,7 +79,9 @@ const UserSettings = () => {
 
   const handleDeleteAccount = async () => {
     try {
-      await deleteAccount().unwrap();
+      if (user) {
+        await deleteAccount().unwrap();
+      }
       dispatch(logout());
       navigate("/login");
       toast.success("Account deleted successfully");
@@ -81,46 +97,48 @@ const UserSettings = () => {
         User Settings
       </h1>
 
-      {/* Theme Settings */}
-      <div>
-        <h2 className="text-lg font-medium mb-4">Theme</h2>
-        <div className="flex flex-wrap items-center gap-4">
-          {["light", "green", "indigo", "dark"].map((themeOption) => (
-            <button
-              key={themeOption}
-              onClick={() =>
-                handleThemeChange(
-                  themeOption as "light" | "dark" | "green" | "indigo"
-                )
-              }
-              disabled={isThemeUpdating}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 ${
-                isThemeUpdating ? 'opacity-50 cursor-not-allowed' : ''
-              } ${
-                themeOption === "dark"
-                  ? theme === themeOption
-                    ? "bg-primary text-white"
+      {/* Theme Settings - Only show for regular users */}
+      {user && (
+        <div>
+          <h2 className="text-lg font-medium mb-4">Theme</h2>
+          <div className="flex flex-wrap items-center gap-4">
+            {["light", "green", "indigo", "dark"].map((themeOption) => (
+              <button
+                key={themeOption}
+                onClick={() =>
+                  handleThemeChange(
+                    themeOption as "light" | "dark" | "green" | "indigo"
+                  )
+                }
+                disabled={isThemeUpdating}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 ${
+                  isThemeUpdating ? 'opacity-50 cursor-not-allowed' : ''
+                } ${
+                  themeOption === "dark"
+                    ? theme === themeOption
+                      ? "bg-primary text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    : theme === themeOption
+                    ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  : theme === themeOption
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              {themeOption === "light" && <Sun className="h-4 w-4" />}
-              {themeOption === "green" && <Leaf className="h-4 w-4" />}
-              {themeOption === "indigo" && <Sparkles className="h-4 w-4" />}
-              {themeOption === "dark" && <Moon className="h-4 w-4" />}
-              {isThemeUpdating ? (
-                <span className="inline-block animate-spin">⌛</span>
-              ) : (
-                themeOption.charAt(0).toUpperCase() + themeOption.slice(1)
-              )}
-            </button>
-          ))}
+                }`}
+              >
+                {themeOption === "light" && <Sun className="h-4 w-4" />}
+                {themeOption === "green" && <Leaf className="h-4 w-4" />}
+                {themeOption === "indigo" && <Sparkles className="h-4 w-4" />}
+                {themeOption === "dark" && <Moon className="h-4 w-4" />}
+                {isThemeUpdating ? (
+                  <span className="inline-block animate-spin">⌛</span>
+                ) : (
+                  themeOption.charAt(0).toUpperCase() + themeOption.slice(1)
+                )}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Password Change */}
+      {/* Password Change - Available for both users and staff */}
       <div>
         <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
           <Lock className="h-5 w-5" />
@@ -196,23 +214,25 @@ const UserSettings = () => {
         </form>
       </div>
 
-      {/* Delete Account */}
-      <div>
-        <h2 className="text-lg font-medium mb-4 flex items-center gap-2 text-red-600">
-          <Trash2 className="h-5 w-5" />
-          Delete Account
-        </h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Once you delete your account, there is no going back. Please be
-          certain.
-        </p>
-        <button
-          onClick={() => setShowDeleteModal(true)}
-          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-        >
-          Delete Account
-        </button>
-      </div>
+      {/* Delete Account - Only show for regular users */}
+      {user && (
+        <div>
+          <h2 className="text-lg font-medium mb-4 flex items-center gap-2 text-red-600">
+            <Trash2 className="h-5 w-5" />
+            Delete Account
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Once you delete your account, there is no going back. Please be
+            certain.
+          </p>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            Delete Account
+          </button>
+        </div>
+      )}
 
       {showDeleteModal && (
         <DeleteAccountModal

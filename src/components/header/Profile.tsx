@@ -5,6 +5,7 @@ import { User } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
 import { useUpdateProfileMutation } from '../../store/services/userService';
+import { useUpdateStaffProfileMutation } from '../../store/services/staffService';
 import UserAvatar from '../profile/UserAvatar';
 import { setCredentials } from '../../store/slices/authSlice';
 
@@ -15,21 +16,31 @@ interface ProfileForm {
 
 const Profile = () => {
   const user = useSelector((state: RootState) => state.auth.user);
-  const [updateProfile] = useUpdateProfileMutation();
+  const staff = useSelector((state: RootState) => state.auth.staff);
+  const [updateUserProfile] = useUpdateProfileMutation();
+  const [updateStaffProfile] = useUpdateStaffProfileMutation();
   const dispatch = useDispatch();
 
   const { register, handleSubmit, formState: { errors } } = useForm<ProfileForm>({
     defaultValues: {
-      name: user?.name || '',
-      email: user?.email || '',
+      name: user?.name || staff?.name || '',
+      email: user?.email || staff?.email || '',
     },
   });
 
   const onSubmit = async (data: ProfileForm) => {
     try {
-      const result = await updateProfile(data).unwrap();
-      dispatch(setCredentials({ ...result }));
-      toast.success('Profile updated successfully');
+      if (user) {
+        const result = await updateUserProfile(data).unwrap();
+        dispatch(setCredentials({ ...result }));
+        toast.success('Profile updated successfully');
+      } else if (staff) {
+        const result = await updateStaffProfile({
+          _id: staff._id,
+          ...data,
+        }).unwrap();
+        toast.success('Profile updated successfully');
+      }
     } catch (error) {
       toast.error('Failed to update profile');
     }
@@ -39,7 +50,7 @@ const Profile = () => {
     <div className="space-y-6">
       <div className="flex flex-col items-center">
         <UserAvatar
-          name={user?.name || ''}
+          name={user?.name || staff?.name || ''}
           size="lg"
         />
       </div>
@@ -65,12 +76,10 @@ const Profile = () => {
           </label>
           <input
             type="email"
-            {...register('email', { required: 'Email is required' })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border-primary focus:ring-primary"
+            {...register('email')}
+            disabled={true}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border-primary focus:ring-primary bg-gray-100"
           />
-          {errors.email && (
-            <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-          )}
         </div>
 
         <div className="flex justify-end">

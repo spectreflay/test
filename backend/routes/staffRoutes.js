@@ -78,6 +78,47 @@ router.put("/:id", protect, async (req, res) => {
   }
 });
 
+// Update staff profile
+router.put("/:id/profile", protect, async (req, res) => {
+  try {
+    const staff = await Staff.findById(req.params.id);
+    if (staff) {
+      staff.name = req.body.name || staff.name;
+      staff.email = req.body.email || staff.email;
+
+      const updatedStaff = await staff.save();
+      res.json({
+        _id: updatedStaff._id,
+        name: updatedStaff.name,
+        email: updatedStaff.email,
+        role: updatedStaff.role,
+        store: updatedStaff.store,
+        status: updatedStaff.status,
+      });
+    } else {
+      res.status(404).json({ message: "Staff member not found" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Update staff password
+router.put("/:id/password", protect, async (req, res) => {
+  try {
+    const staff = await Staff.findById(req.params.id);
+    if (staff && (await staff.matchPassword(req.body.currentPassword))) {
+      staff.password = req.body.newPassword;
+      await staff.save();
+      res.json({ message: "Password updated successfully" });
+    } else {
+      res.status(401).json({ message: "Invalid current password" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 // Delete staff member
 router.delete("/:id", protect, async (req, res) => {
   try {
