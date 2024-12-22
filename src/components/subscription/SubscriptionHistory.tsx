@@ -10,6 +10,7 @@ interface SubscriptionHistoryProps {
     status: string;
     amount: number;
     paymentMethod: string;
+    billingCycle: 'monthly' | 'yearly';
   }>;
   onClose: () => void;
 }
@@ -50,6 +51,9 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Payment Method
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Billing Cycle
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -80,6 +84,9 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
                     {item.paymentMethod}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                    {item.billingCycle}
                   </td>
                 </tr>
               ))}

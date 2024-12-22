@@ -11,8 +11,8 @@ const subscriptionData = [
     maxProducts: 10,
     maxStaff: 2,
     maxStores: 1,
-    price: 0,
-    billingCycle: "monthly",
+    monthlyPrice: 0,
+    yearlyPrice: 0
   },
   {
     name: "basic",
@@ -20,8 +20,8 @@ const subscriptionData = [
     maxProducts: 100,
     maxStaff: 5,
     maxStores: 2,
-    price: 29,
-    billingCycle: "monthly",
+    monthlyPrice: 29,
+    yearlyPrice: 278
   },
   {
     name: "premium",
@@ -32,14 +32,13 @@ const subscriptionData = [
       "inventory_alerts",
       "multiple_stores",
       "custom_roles",
-      "api_access",
       "priority_support",
     ],
     maxProducts: 999999,
     maxStaff: 999999,
     maxStores: 999999,
-    price: 99,
-    billingCycle: "monthly",
+    monthlyPrice: 99,
+    yearlyPrice: 950
   },
 ];
 const connectDB = async () => {
@@ -65,10 +64,8 @@ const connectDB = async () => {
 const initSubscriptions = async () => {
   try {
     await connectDB();
-
     await Subscription.deleteMany({});
     await Subscription.insertMany(subscriptionData);
-
     console.log("Subscription plans initialized successfully");
     process.exit(0);
   } catch (error) {

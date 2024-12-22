@@ -7,6 +7,7 @@ import {
   useGetCurrentSubscriptionQuery,
   useSubscribeMutation,
   useVerifySubscriptionMutation,
+  useGetSubscriptionHistoryQuery,
 } from "../store/services/subscriptionService";
 import PaymentModal from "../components/payment/PaymentModal";
 import BillingCycleToggle from "../components/subscription/BillingCycleToggle";
@@ -16,6 +17,7 @@ const SubscriptionPage = () => {
   const { data: subscriptions } = useGetSubscriptionsQuery();
   const { data: currentSubscription, refetch: refetchCurrentSubscription } =
     useGetCurrentSubscriptionQuery();
+  const { data: subscriptionHistory } = useGetSubscriptionHistoryQuery();
   const [subscribe] = useSubscribeMutation();
   const [verifySubscription] = useVerifySubscriptionMutation();
   const navigate = useNavigate();
@@ -25,25 +27,12 @@ const SubscriptionPage = () => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [showHistory, setShowHistory] = useState(false);
 
-  // Mock subscription history data - replace with actual data from your API
-  const subscriptionHistory = [
-    {
-      subscriptionName: currentSubscription?.subscription.name || 'free',
-      startDate: currentSubscription?.startDate || new Date().toISOString(),
-      endDate: currentSubscription?.endDate || new Date().toISOString(),
-      status: currentSubscription?.status || 'active',
-      amount: currentSubscription?.subscription.price || 0,
-      paymentMethod: currentSubscription?.paymentMethod || 'free',
-    },
-  ];
-
   // Calculate price based on billing cycle
-  const calculatePrice = (basePrice: number) => {
+  const calculatePrice = (subscription: any) => {
     if (billingCycle === 'yearly') {
-      // 20% discount for yearly billing
-      return (basePrice * 12 * 0.8).toFixed(2);
+      return subscription.yearlyPrice.toFixed(2);
     }
-    return basePrice.toFixed(2);
+    return subscription.monthlyPrice.toFixed(2);
   };
 
   // Handle payment status from URL parameters
@@ -76,11 +65,31 @@ const SubscriptionPage = () => {
   };
 
   const handleSubscribe = async (subscription: any) => {
+    // Allow upgrading from a lower tier to a higher tier
     if (currentSubscription?.subscription._id === subscription._id) {
+      toast.error("You are already subscribed to this plan");
       return;
     }
+
+    // Check if trying to downgrade
+    const currentTier = getTierLevel(currentSubscription?.subscription.name);
+    const newTier = getTierLevel(subscription.name);
+    if (newTier < currentTier) {
+      toast.error("Please contact support to downgrade your subscription");
+      return;
+    }
+
     setSelectedPlan(subscription);
     setShowPaymentModal(true);
+  };
+
+  const getTierLevel = (planName?: string) => {
+    switch (planName) {
+      case 'premium': return 3;
+      case 'basic': return 2;
+      case 'free': return 1;
+      default: return 0;
+    }
   };
 
   const handlePaymentSuccess = async () => {
@@ -140,7 +149,7 @@ const SubscriptionPage = () => {
             {subscriptions?.map((subscription) => {
               const isCurrentPlan =
                 currentSubscription?.subscription._id === subscription._id;
-              const price = calculatePrice(subscription.price);
+              const price = calculatePrice(subscription);
 
               return (
                 <div
@@ -235,22 +244,27 @@ const SubscriptionPage = () => {
           </div>
         </div>
 
-        {showPaymentModal && (
+        {showPaymentModal && selectedPlan && (
           <PaymentModal
             isOpen={showPaymentModal}
             onClose={() => setShowPaymentModal(false)}
             subscriptionId={selectedPlan._id}
             amount={billingCycle === 'yearly' 
-              ? selectedPlan.price * 12 * 0.8 
-              : selectedPlan.price}
+              ? selectedPlan.yearlyPrice 
+              : selectedPlan.monthlyPrice}
             onSuccess={handlePaymentSuccess}
             billingCycle={billingCycle}
           />
         )}
 
-        {showHistory && (
+        {showHistory && subscriptionHistory && (
           <SubscriptionHistory
-            history={subscriptionHistory}
+            history={subscriptionHistory.map(history => ({
+              ...history,
+              amount: history.billingCycle === 'yearly' 
+                ? history.subscription.yearlyPrice 
+                : history.subscription.monthlyPrice
+            }))}
             onClose={() => setShowHistory(false)}
           />
         )}
