@@ -7,8 +7,10 @@ export interface Subscription {
   maxProducts: number;
   maxStaff: number;
   maxStores: number;
-  price: number;
-  billingCycle: "monthly" | "yearly";
+  monthlyPrice: number;
+  yearlyPrice: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserSubscription {
@@ -26,6 +28,21 @@ export interface UserSubscription {
     amount?: number;
     status?: string;
   };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubscriptionHistory {
+  _id: string;
+  user: string;
+  subscription: Subscription;
+  action: 'subscribed' | 'cancelled' | 'billing_cycle_changed';
+  reason?: string;
+  billingCycle: 'monthly' | 'yearly';
+  createdAt: string;
+  amount: number;
+  paymentMethod?: string;
+  status?: string;
 }
 
 export interface SubscribeRequest {
@@ -49,27 +66,48 @@ export const subscriptionApi = api.injectEndpoints({
       query: () => "subscriptions/current",
       providesTags: ["CurrentSubscription"],
     }),
+    getSubscriptionHistory: builder.query<SubscriptionHistory[], void>({
+      query: () => "subscriptions/history",
+      providesTags: ["SubscriptionHistory"],
+      transformResponse: (response: SubscriptionHistory[]) => {
+        // Sort by date (newest first)
+        return [...response].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      },
+    }),
     subscribe: builder.mutation<UserSubscription, SubscribeRequest>({
       query: (data) => ({
         url: "subscriptions/subscribe",
         method: "POST",
         body: data,
       }),
-      invalidatesTags: ["CurrentSubscription"],
+      invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
           const { data: subscription } = await queryFulfilled;
 
-          // Force refetch current subscription after successful subscription
-          await dispatch(
-            subscriptionApi.endpoints.getCurrentSubscription.initiate(
-              undefined,
-              {
-                forceRefetch: true,
-                subscribe: false,
-              }
-            )
-          );
+          // Force refetch current subscription and history after successful subscription
+          await Promise.all([
+            dispatch(
+              subscriptionApi.endpoints.getCurrentSubscription.initiate(
+                undefined,
+                {
+                  forceRefetch: true,
+                  subscribe: false,
+                }
+              )
+            ),
+            dispatch(
+              subscriptionApi.endpoints.getSubscriptionHistory.initiate(
+                undefined,
+                {
+                  forceRefetch: true,
+                  subscribe: false,
+                }
+              )
+            ),
+          ]);
 
           return subscription;
         } catch (error) {
@@ -87,39 +125,14 @@ export const subscriptionApi = api.injectEndpoints({
         method: "POST",
         body: data,
       }),
-      invalidatesTags: ["CurrentSubscription"],
-      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
-        try {
-          const { data: verifiedSubscription } = await queryFulfilled;
-
-          // Force refetch current subscription after verification
-          await dispatch(
-            subscriptionApi.endpoints.getCurrentSubscription.initiate(
-              undefined,
-              {
-                forceRefetch: true,
-                subscribe: false,
-              }
-            )
-          );
-
-          return verifiedSubscription;
-        } catch (error) {
-          console.error("Error verifying subscription:", error);
-          throw error;
-        }
-      },
+      invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
     }),
     cancelSubscription: builder.mutation<void, void>({
       query: () => ({
         url: "subscriptions/cancel",
         method: "POST",
       }),
-      invalidatesTags: ["CurrentSubscription"],
-    }),
-    getSubscriptionHistory: builder.query<any[], void>({
-      query: () => "subscriptions/history",
-      providesTags: ["SubscriptionHistory"],
+      invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
     }),
     changeBillingCycle: builder.mutation<
       UserSubscription,
@@ -138,8 +151,9 @@ export const subscriptionApi = api.injectEndpoints({
 export const {
   useGetSubscriptionsQuery,
   useGetCurrentSubscriptionQuery,
+  useGetSubscriptionHistoryQuery,
   useSubscribeMutation,
   useVerifySubscriptionMutation,
   useCancelSubscriptionMutation,
-  useGetSubscriptionHistoryQuery,
+  useChangeBillingCycleMutation,
 } = subscriptionApi;
