@@ -11,6 +11,7 @@ interface PaymentModalProps {
   onClose: () => void;
   subscriptionId: string;
   amount: number;
+  billingCycle: 'monthly' | 'yearly';
   onSuccess: () => void;
 }
 
@@ -22,6 +23,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   onClose,
   subscriptionId,
   amount,
+  billingCycle,
   onSuccess,
 }) => {
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
@@ -201,7 +203,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               <PaymentSummary
                 planName={subscriptionId}
                 amount={amount}
-                billingCycle="monthly"
+                billingCycle={billingCycle}
               />
             </div>
           </div>

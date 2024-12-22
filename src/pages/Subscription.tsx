@@ -244,6 +244,7 @@ const SubscriptionPage = () => {
               ? selectedPlan.price * 12 * 0.8 
               : selectedPlan.price}
             onSuccess={handlePaymentSuccess}
+            billingCycle={billingCycle}
           />
         )}
 
