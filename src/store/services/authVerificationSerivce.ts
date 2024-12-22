@@ -5,8 +5,14 @@ export interface EmailVerificationResponse {
   message: string;
 }
 
-export const emailVerificationApi = api.injectEndpoints({
+export interface PasswordResetResponse {
+  success: boolean;
+  message: string;
+}
+
+export const authVerificationApi = api.injectEndpoints({
   endpoints: (builder) => ({
+    // Email verification endpoints
     sendVerificationEmail: builder.mutation<EmailVerificationResponse, void>({
       query: () => ({
         url: 'auth/send-verification',
@@ -27,11 +33,34 @@ export const emailVerificationApi = api.injectEndpoints({
         body: data,
       }),
     }),
+
+    // Password reset endpoints
+    forgotPassword: builder.mutation<PasswordResetResponse, { email: string }>({
+      query: (data) => ({
+        url: 'auth/forgot-password',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+    resetPassword: builder.mutation<
+      PasswordResetResponse,
+      { token: string; newPassword: string }
+    >({
+      query: (data) => ({
+        url: 'auth/reset-password',
+        method: 'POST',
+        body: data,
+      }),
+    }),
   }),
 });
 
 export const {
+  // Email verification hooks
   useSendVerificationEmailMutation,
   useVerifyEmailMutation,
   useResendVerificationMutation,
-} = emailVerificationApi;
+  // Password reset hooks
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
+} = authVerificationApi;

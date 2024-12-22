@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Mail, ArrowLeft, RefreshCw } from 'lucide-react';
-import { useVerifyEmailMutation } from '../store/services/emailVerificationService';
+import { useVerifyEmailMutation } from '../store/services/authVerificationSerivce';
 import { useSubscribeMutation } from '../store/services/subscriptionService';
 import { useGetSubscriptionsQuery } from '../store/services/subscriptionService';
 

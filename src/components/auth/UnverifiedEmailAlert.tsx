@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { useSendVerificationEmailMutation } from '../../store/services/emailVerificationService';
+import { useSendVerificationEmailMutation } from '../../store/services/authVerificationSerivce';
 import { toast } from 'react-hot-toast';
 
 const UnverifiedEmailAlert = () => {

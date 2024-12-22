@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Mail, ArrowLeft } from 'lucide-react';
-import { useResendVerificationMutation } from '../store/services/emailVerificationService';
+import { useResendVerificationMutation } from '../store/services/authVerificationSerivce';
 
 const ResendVerification = () => {
   const [email, setEmail] = useState('');

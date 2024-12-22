@@ -6,12 +6,10 @@ import {
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from "../utils/emailService.js";
+import VerificationToken from "../models/verificationTokenModel.js";
 import {
   generateVerificationToken,
   createVerificationLink,
-} from "../utils/verificationUtils.js";
-import VerificationToken from "../models/verificationTokenModel.js";
-import {
   createResetLink,
   generateResetToken,
   verifyResetToken,

@@ -36,6 +36,8 @@ import NotFound from "./pages/NotFound";
 import About from "./pages/About";
 import EmailVerification from "./pages/EmailVerification";
 import ResendVerification from "./pages/ResendVerification";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function App() {
   const { token, staff } = useSelector((state: RootState) => state.auth);
@@ -67,6 +69,8 @@ function App() {
         <Route path="/About" element={<About />} />
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/resend-verification" element={<ResendVerification />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         <Route
           path="/"
