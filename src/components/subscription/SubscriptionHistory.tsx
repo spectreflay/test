@@ -14,38 +14,44 @@ interface SubscriptionHistoryProps {
     action: 'subscribed' | 'cancelled' | 'billing_cycle_changed';
     reason?: string;
     billingCycle: 'monthly' | 'yearly';
+    startDate: string;
+    endDate: string;
+    autoRenew: boolean;
+    paymentMethod: string;
+    paymentDetails?: {
+      paymentId?: string;
+      amount?: number;
+      status?: string;
+    };
     createdAt: string;
-    amount: number;
-    paymentMethod?: string;
-    status?: string;
   }>;
   onClose: () => void;
 }
 
 const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onClose }) => {
-  const getActionLabel = (action: string) => {
-    switch (action) {
-      case 'subscribed':
-        return 'Subscribed';
-      case 'cancelled':
-        return 'Cancelled';
-      case 'billing_cycle_changed':
-        return 'Changed Billing Cycle';
+  const getStatusBadgeColor = (status?: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'failed':
+        return 'bg-red-100 text-red-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
       default:
-        return action;
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getStatusBadgeColor = (status?: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      case 'expired':
-        return 'bg-gray-100 text-gray-800';
+  const formatPaymentMethod = (method: string) => {
+    switch (method) {
+      case 'grab_pay':
+        return 'GrabPay';
+      case 'maya':
+        return 'Maya';
+      case 'gcash':
+        return 'GCash';
       default:
-        return 'bg-blue-100 text-blue-800';
+        return method.charAt(0).toUpperCase() + method.slice(1);
     }
   };
 
@@ -72,9 +78,8 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Cycle</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Method</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
@@ -88,33 +93,47 @@ const SubscriptionHistory: React.FC<SubscriptionHistoryProps> = ({ history, onCl
                     <span className="text-sm font-medium text-gray-900 capitalize">
                       {item.subscription.name}
                     </span>
+                    <p className="text-xs text-gray-500">
+                      ${item.billingCycle === 'yearly' 
+                        ? item.subscription.yearlyPrice 
+                        : item.subscription.monthlyPrice}/{item.billingCycle}
+                    </p>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-900">
-                      {getActionLabel(item.action)}
+                      {item.action.split('_').map(word => 
+                        word.charAt(0).toUpperCase() + word.slice(1)
+                      ).join(' ')}
                     </span>
                     {item.reason && (
-                      <p className="text-xs text-gray-500 mt-1">{item.reason}</p>
+                      <p className="text-xs text-gray-500">{item.reason}</p>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900 capitalize">
-                      {item.billingCycle}
+                    <div className="text-sm text-gray-900">
+                      {format(new Date(item.startDate), 'MMM dd, yyyy')} -
+                      <br />
+                      {format(new Date(item.endDate), 'MMM dd, yyyy')}
+                    </div>
+                    <span className={`text-xs ${item.autoRenew ? 'text-green-600' : 'text-gray-500'}`}>
+                      {item.autoRenew ? 'Auto-renew enabled' : 'Auto-renew disabled'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-900">
-                      ${item.amount.toFixed(2)}
+                      {formatPaymentMethod(item.paymentMethod)}
                     </span>
+                    {item.paymentDetails?.amount && (
+                      <p className="text-xs text-gray-500">
+                        ${item.paymentDetails.amount.toFixed(2)}
+                      </p>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900 capitalize">
-                      {item.paymentMethod || '-'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(item.status)}`}>
-                      {item.status || 'completed'}
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      getStatusBadgeColor(item.paymentDetails?.status)
+                    }`}>
+                      {item.paymentDetails?.status || 'completed'}
                     </span>
                   </td>
                 </tr>

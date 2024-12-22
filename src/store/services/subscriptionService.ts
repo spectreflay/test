@@ -39,16 +39,23 @@ export interface SubscriptionHistory {
   action: 'subscribed' | 'cancelled' | 'billing_cycle_changed';
   reason?: string;
   billingCycle: 'monthly' | 'yearly';
+  startDate: string;
+  endDate: string;
+  autoRenew: boolean;
+  paymentMethod: string;
+  paymentDetails?: {
+    paymentId?: string;
+    amount?: number;
+    status?: string;
+  };
   createdAt: string;
-  amount: number;
-  paymentMethod?: string;
-  status?: string;
 }
 
 export interface SubscribeRequest {
   subscriptionId: string;
   paymentMethod: string;
   billingCycle: "monthly" | "yearly";
+  autoRenew?: boolean;
   paymentDetails?: {
     paymentId?: string;
     amount?: number;

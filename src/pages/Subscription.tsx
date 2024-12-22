@@ -279,7 +279,7 @@ const SubscriptionPage = () => {
             })}
           </div>
         </div>
-
+{console.log(subscriptionHistory)}
         {showPaymentModal && selectedPlan && (
           <PaymentModal
             isOpen={showPaymentModal}
