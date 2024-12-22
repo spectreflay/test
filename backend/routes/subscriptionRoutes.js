@@ -47,7 +47,6 @@ router.get('/history', protect, async (req, res) => {
 router.post('/subscribe', protect, async (req, res) => {
   try {
     const { subscriptionId, paymentMethod, paymentDetails, billingCycle = 'monthly' } = req.body;
-    console.log(billingCycle,'billingCycle')
 
     // Get current subscription if exists
     const currentSubscription = await UserSubscription.findOne({
@@ -63,34 +62,42 @@ router.post('/subscribe', protect, async (req, res) => {
       prorationCredit = daysLeft * dailyRate;
     }
 
-    // Cancel current subscription
-    if (currentSubscription) {
-      currentSubscription.status = 'cancelled';
-      currentSubscription.autoRenew = false;
-      await currentSubscription.save();
-
-      // Record in history
-      await SubscriptionHistory.create({
-        user: req.user._id,
-        subscription: currentSubscription.subscription,
-        action: 'cancelled',
-        reason: 'upgrade/downgrade'
-      });
-    }
-
     // Calculate end date based on billing cycle
+    const startDate = new Date();
     const endDate = new Date();
     if (billingCycle === 'yearly') {
       endDate.setFullYear(endDate.getFullYear() + 1);
     } else {
       endDate.setMonth(endDate.getMonth() + 1);
     }
+
+    // Cancel current subscription
+    if (currentSubscription) {
+      currentSubscription.status = 'cancelled';
+      currentSubscription.autoRenew = false;
+      await currentSubscription.save();
+
+      // Record cancellation in history
+      await SubscriptionHistory.create({
+        user: req.user._id,
+        subscription: currentSubscription.subscription,
+        action: 'cancelled',
+        reason: 'upgrade/downgrade',
+        billingCycle: currentSubscription.billingCycle,
+        startDate: currentSubscription.startDate,
+        endDate: currentSubscription.endDate,
+        autoRenew: false,
+        paymentMethod: currentSubscription.paymentMethod,
+        paymentDetails: currentSubscription.paymentDetails
+      });
+    }
+
     // Create new subscription
     const userSubscription = await UserSubscription.create({
       user: req.user._id,
       subscription: subscriptionId,
       status: 'active',
-      startDate: new Date(),
+      startDate,
       endDate,
       billingCycle,
       prorationCredit,
@@ -99,12 +106,17 @@ router.post('/subscribe', protect, async (req, res) => {
       autoRenew: true
     });
 
-    // Record in history
+    // Record subscription in history
     await SubscriptionHistory.create({
       user: req.user._id,
       subscription: subscriptionId,
       action: 'subscribed',
-      billingCycle
+      billingCycle,
+      startDate,
+      endDate,
+      autoRenew: true,
+      paymentMethod,
+      paymentDetails
     });
 
     const populatedSubscription = await UserSubscription.findById(userSubscription._id)
@@ -133,12 +145,18 @@ router.post('/cancel', protect, async (req, res) => {
     subscription.autoRenew = false;
     await subscription.save();
 
-    // Record in history
+    // Record cancellation in history
     await SubscriptionHistory.create({
       user: req.user._id,
       subscription: subscription.subscription,
       action: 'cancelled',
-      reason: 'user_requested'
+      reason: 'user_requested',
+      billingCycle: subscription.billingCycle,
+      startDate: subscription.startDate,
+      endDate: subscription.endDate,
+      autoRenew: false,
+      paymentMethod: subscription.paymentMethod,
+      paymentDetails: subscription.paymentDetails
     });
 
     res.json({ message: 'Subscription cancelled successfully' });
@@ -160,7 +178,7 @@ router.post('/change-billing-cycle', protect, async (req, res) => {
       return res.status(404).json({ message: 'No active subscription found' });
     }
 
-    // Update end date based on new billing cycle
+    // Calculate new end date based on billing cycle
     const endDate = new Date();
     if (billingCycle === 'yearly') {
       endDate.setFullYear(endDate.getFullYear() + 1);
@@ -172,12 +190,17 @@ router.post('/change-billing-cycle', protect, async (req, res) => {
     subscription.endDate = endDate;
     await subscription.save();
 
-    // Record in history
+    // Record billing cycle change in history
     await SubscriptionHistory.create({
       user: req.user._id,
       subscription: subscription.subscription,
       action: 'billing_cycle_changed',
-      billingCycle
+      billingCycle,
+      startDate: subscription.startDate,
+      endDate,
+      autoRenew: subscription.autoRenew,
+      paymentMethod: subscription.paymentMethod,
+      paymentDetails: subscription.paymentDetails
     });
 
     res.json(subscription);
