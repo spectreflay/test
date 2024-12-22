@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Mail, ArrowLeft, RefreshCw } from 'lucide-react';
@@ -15,12 +15,14 @@ const EmailVerification = () => {
   const [subscribe] = useSubscribeMutation();
   const { data: subscriptions } = useGetSubscriptionsQuery();
   const { email, name, message } = location.state || {};
-  const [hasVerified, setHasVerified] = useState(false);
+  const verificationAttemptedRef = useRef(false);
 
   useEffect(() => {
     const verifyToken = async () => {
-      if (!token || hasVerified) return;
-      setHasVerified(true);
+      if (!token || verificationAttemptedRef.current) return;
+      
+      verificationAttemptedRef.current = true; // Mark verification as attempted
+      
       try {
         await verifyEmail({ token }).unwrap();
         
@@ -44,7 +46,7 @@ const EmailVerification = () => {
     };
 
     verifyToken();
-  }, [token, verifyEmail, subscribe, subscriptions,hasVerified]);
+  }, [token, verifyEmail, subscribe, subscriptions, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
