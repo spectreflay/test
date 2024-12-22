@@ -36,6 +36,16 @@ const loadState = (): AuthState => {
         };
       }
     }
+
+    // If staff exists, load their theme preference
+    if (staff) {
+      const staffData = JSON.parse(staff);
+      if (staffData.themePreference) {
+        const setTheme = useThemeStore.getState().setTheme;
+        setTheme(staffData.themePreference);
+      }
+    }
+
     return {
       token: token || null,
       user: user ? JSON.parse(user) : null,
@@ -68,15 +78,15 @@ const authSlice = createSlice({
       }>
     ) => {
       const { token, ...user } = action.payload;
-      
+
       // Clear any existing store data
       localStorage.removeItem("selectedStoreId");
-      
+
       // Set token and user regardless of verification status during registration
       state.token = token;
       state.user = user;
       state.staff = null;
-      
+
       // Store in localStorage
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
@@ -87,9 +97,9 @@ const authSlice = createSlice({
       }
 
       // Set theme preference
-      if (action.payload.themePreference) {
+      if (user.themePreference) {
         const setTheme = useThemeStore.getState().setTheme;
-        setTheme(action.payload.themePreference);
+        setTheme(user.themePreference);
       }
     },
     setStaffCredentials: (
@@ -104,6 +114,12 @@ const authSlice = createSlice({
       state.user = null;
       localStorage.setItem("token", token);
       localStorage.setItem("staff", JSON.stringify(staff));
+
+      // Set theme preference for staff
+      if (staff.themePreference) {
+        const setTheme = useThemeStore.getState().setTheme;
+        setTheme(staff.themePreference);
+      }
     },
     logout: (state) => {
       state.token = null;
@@ -124,5 +140,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { setCredentials, setStaffCredentials, logout } = authSlice.actions;
+export const { setCredentials, setStaffCredentials, logout } =
+  authSlice.actions;
 export default authSlice.reducer;

@@ -1,6 +1,9 @@
 import { api } from "../api";
 import { Role } from "./roleService";
-import { createNotification, getStaffLoginMessage } from "../../utils/notification";
+import {
+  createNotification,
+  getStaffLoginMessage,
+} from "../../utils/notification";
 
 export interface Staff {
   _id: string;
@@ -9,6 +12,7 @@ export interface Staff {
   role: Role;
   store: string;
   status: "active" | "inactive";
+  themePreference: "light" | "dark" | "green" | "indigo";
   lastLogin?: string;
   createdAt: string;
   updatedAt: string;
@@ -76,6 +80,19 @@ export const staffApi = api.injectEndpoints({
         body: data,
       }),
     }),
+    updateStaffTheme: builder.mutation<
+      void,
+      { _id: string; themePreference: "light" | "dark" | "green" | "indigo" }
+    >({
+      query: ({ _id, themePreference }) => ({
+        url: `staff/${_id}/theme`,
+        method: "PUT",
+        body: { themePreference },
+      }),
+    }),
+    getStaffTheme: builder.query<{ themePreference: string }, string>({
+      query: (id) => `staff/${id}/theme`,
+    }),
     deleteStaff: builder.mutation<void, string>({
       query: (id) => ({
         url: `staff/${id}`,
@@ -99,6 +116,8 @@ export const {
   useUpdateStaffMutation,
   useUpdateStaffProfileMutation,
   useUpdateStaffPasswordMutation,
+  useUpdateStaffThemeMutation,
+  useGetStaffThemeQuery,
   useDeleteStaffMutation,
   useStaffLoginMutation,
 } = staffApi;

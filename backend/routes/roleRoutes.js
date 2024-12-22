@@ -48,7 +48,7 @@ router.delete("/:id", protect, async (req, res) => {
       if (role.isDefault) {
         return res.status(400).json({ message: "Cannot delete default role" });
       }
-      await role.remove();
+      await Role.findByIdAndDelete(req.params.id);
       res.json({ message: "Role removed" });
     } else {
       res.status(404).json({ message: "Role not found" });

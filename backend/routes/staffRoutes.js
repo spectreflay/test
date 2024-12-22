@@ -119,12 +119,41 @@ router.put("/:id/password", protect, async (req, res) => {
   }
 });
 
-// Delete staff member
-router.delete("/:id", protect, async (req, res) => {
+// Add theme route
+router.put("/:id/theme", protect, async (req, res) => {
   try {
     const staff = await Staff.findById(req.params.id);
     if (staff) {
-      await staff.remove();
+      staff.themePreference = req.body.themePreference;
+      await staff.save();
+      res.json({ message: "Theme updated successfully" });
+    } else {
+      res.status(404).json({ message: "Staff member not found" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Get theme route
+router.get("/:id/theme", protect, async (req, res) => {
+  try {
+    const staff = await Staff.findById(req.params.id);
+    if (staff) {
+      res.json({ themePreference: staff.themePreference });
+    } else {
+      res.status(404).json({ message: "Staff member not found" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Delete staff member
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const staff = await Staff.findByIdAndDelete(req.params.id);
+    if (staff) {
       res.json({ message: "Staff member removed" });
     } else {
       res.status(404).json({ message: "Staff member not found" });

@@ -30,6 +30,11 @@ const staffSchema = new mongoose.Schema({
     enum: ['active', 'inactive'],
     default: 'active'
   },
+  themePreference: {
+    type: String,
+    enum: ['light', 'dark', 'green', 'indigo'],
+    default: 'light'
+  },
   lastLogin: Date
 }, {
   timestamps: true

@@ -1,13 +1,24 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "react-hot-toast";
-import { Settings, Moon, Sun, Lock, Trash2, Leaf, Sparkles } from 'lucide-react';
+import {
+  Settings,
+  Moon,
+  Sun,
+  Lock,
+  Trash2,
+  Leaf,
+  Sparkles,
+} from "lucide-react";
 import {
   useUpdatePasswordMutation,
   useDeleteAccountMutation,
   useUpdateThemeMutation,
 } from "../../store/services/userService";
-import { useUpdateStaffPasswordMutation } from "../../store/services/staffService";
+import {
+  useUpdateStaffPasswordMutation,
+  useUpdateStaffThemeMutation,
+} from "../../store/services/staffService";
 import { useThemeStore } from "../../store/ui/themeStore";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../store";
@@ -25,7 +36,9 @@ const UserSettings = () => {
   const { theme, setTheme } = useThemeStore();
   const [updateUserPassword] = useUpdatePasswordMutation();
   const [updateStaffPassword] = useUpdateStaffPasswordMutation();
-  const [updateTheme, { isLoading: isThemeUpdating }] = useUpdateThemeMutation();
+  const [updateTheme, { isLoading: isThemeUpdating }] =
+    useUpdateThemeMutation();
+  const [updateStaffTheme] = useUpdateStaffThemeMutation();
   const [deleteAccount] = useDeleteAccountMutation();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const dispatch = useDispatch();
@@ -65,10 +78,17 @@ const UserSettings = () => {
     }
   };
 
-  const handleThemeChange = async (newTheme: "light" | "dark" | "green" | "indigo") => {
+  const handleThemeChange = async (
+    newTheme: "light" | "dark" | "green" | "indigo"
+  ) => {
     try {
       if (user) {
         await updateTheme({ themePreference: newTheme }).unwrap();
+      } else if (staff) {
+        await updateStaffTheme({
+          _id: staff._id,
+          themePreference: newTheme,
+        }).unwrap();
       }
       setTheme(newTheme);
       toast.success("Theme updated successfully");
@@ -97,46 +117,43 @@ const UserSettings = () => {
         User Settings
       </h1>
 
-      {/* Theme Settings - Only show for regular users */}
-      {user && (
-        <div>
-          <h2 className="text-lg font-medium mb-4">Theme</h2>
-          <div className="flex flex-wrap items-center gap-4">
-            {["light", "green", "indigo", "dark"].map((themeOption) => (
-              <button
-                key={themeOption}
-                onClick={() =>
-                  handleThemeChange(
-                    themeOption as "light" | "dark" | "green" | "indigo"
-                  )
-                }
-                disabled={isThemeUpdating}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 ${
-                  isThemeUpdating ? 'opacity-50 cursor-not-allowed' : ''
-                } ${
-                  themeOption === "dark"
-                    ? theme === themeOption
-                      ? "bg-primary text-white"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    : theme === themeOption
-                    ? "bg-primary text-primary-foreground"
+      <div>
+        <h2 className="text-lg font-medium mb-4">Theme</h2>
+        <div className="flex flex-wrap items-center gap-4">
+          {["light", "green", "indigo", "dark"].map((themeOption) => (
+            <button
+              key={themeOption}
+              onClick={() =>
+                handleThemeChange(
+                  themeOption as "light" | "dark" | "green" | "indigo"
+                )
+              }
+              disabled={isThemeUpdating}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 ${
+                isThemeUpdating ? "opacity-50 cursor-not-allowed" : ""
+              } ${
+                themeOption === "dark"
+                  ? theme === themeOption
+                    ? "bg-primary text-white"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                {themeOption === "light" && <Sun className="h-4 w-4" />}
-                {themeOption === "green" && <Leaf className="h-4 w-4" />}
-                {themeOption === "indigo" && <Sparkles className="h-4 w-4" />}
-                {themeOption === "dark" && <Moon className="h-4 w-4" />}
-                {isThemeUpdating ? (
-                  <span className="inline-block animate-spin">⌛</span>
-                ) : (
-                  themeOption.charAt(0).toUpperCase() + themeOption.slice(1)
-                )}
-              </button>
-            ))}
-          </div>
+                  : theme === themeOption
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {themeOption === "light" && <Sun className="h-4 w-4" />}
+              {themeOption === "green" && <Leaf className="h-4 w-4" />}
+              {themeOption === "indigo" && <Sparkles className="h-4 w-4" />}
+              {themeOption === "dark" && <Moon className="h-4 w-4" />}
+              {isThemeUpdating ? (
+                <span className="inline-block animate-spin">⌛</span>
+              ) : (
+                themeOption.charAt(0).toUpperCase() + themeOption.slice(1)
+              )}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Password Change - Available for both users and staff */}
       <div>
