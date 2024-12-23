@@ -47,7 +47,7 @@ router.get('/history', protect, async (req, res) => {
 router.post('/subscribe', protect, async (req, res) => {
   try {
     const { subscriptionId, paymentMethod, paymentDetails, billingCycle = 'monthly' } = req.body;
-
+console.log(req.body,'data')
     // Get current subscription if exists
     const currentSubscription = await UserSubscription.findOne({
       user: req.user._id,

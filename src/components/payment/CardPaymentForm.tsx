@@ -10,8 +10,8 @@ interface CardPaymentFormProps {
   subscriptionId: string;
   billingCycle: 'monthly' | 'yearly';
   onSuccess: () => void;
-  onBack: () => void;
   onError: (error: string) => void;
+  onBack: () => void;
 }
 
 interface CardFormData {
@@ -35,6 +35,7 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
   const { register, handleSubmit, formState: { errors } } = useForm<CardFormData>();
 
   const onSubmit = async (data: CardFormData) => {
+    console.log('Form submitted with data:', data);
     try {
       setIsProcessing(true);
 
@@ -53,6 +54,8 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
         }
       });
 
+      console.log('Payment method created:', paymentMethod);
+
       // Create payment intent
       const paymentIntent = await createPaymentIntent({
         amount,
@@ -62,21 +65,38 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
         currency: 'PHP'
       });
 
-      // Update subscription with payment details
-      await subscribe({
+      console.log('Payment intent created:', paymentIntent);
+
+      // Store card details for auto-renewal (excluding CVC)
+      const cardDetails = {
+        cardNumber: data.cardNumber.slice(-4), // Only store last 4 digits
+        expMonth: parseInt(data.expMonth),
+        expYear: parseInt(data.expYear),
+        cardHolder: data.cardHolder
+      };
+
+      console.log('Card details to be stored:', cardDetails);
+
+      // Update subscription with payment and card details
+      const subscriptionResult = await subscribe({
         subscriptionId,
         paymentMethod: 'card',
         billingCycle,
+        autoRenew: true, // Enable auto-renewal by default for card payments
         paymentDetails: {
           paymentId: paymentIntent.id,
           amount,
-          status: 'completed'
+          status: 'completed',
+          cardDetails // Include card details for future auto-renewal
         }
       }).unwrap();
+
+      console.log('Subscription updated:', subscriptionResult);
 
       toast.success('Payment successful!');
       onSuccess();
     } catch (error: any) {
+      console.error('Payment error:', error);
       onError(error.message || 'Payment failed');
     } finally {
       setIsProcessing(false);
@@ -217,3 +237,4 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
 };
 
 export default CardPaymentForm;
+

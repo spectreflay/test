@@ -12,7 +12,7 @@ export interface PaymentDetails {
   paymentId?: string;
   amount?: number;
   status?: string;
-  cardDetails?: Omit<CardDetails, 'cvc'>; // Never store CVC
+  cardDetails?: Omit<CardDetails, "cvc">; // Never store CVC
 }
 
 export interface Subscription {
@@ -47,9 +47,9 @@ export interface SubscriptionHistory {
   _id: string;
   user: string;
   subscription: Subscription;
-  action: 'subscribed' | 'cancelled' | 'billing_cycle_changed';
+  action: "subscribed" | "cancelled" | "billing_cycle_changed";
   reason?: string;
-  billingCycle: 'monthly' | 'yearly';
+  billingCycle: "monthly" | "yearly";
   startDate: string;
   endDate: string;
   autoRenew: boolean;
@@ -67,11 +67,16 @@ export interface SubscribeRequest {
   paymentMethod: string;
   billingCycle: "monthly" | "yearly";
   autoRenew?: boolean;
-  paymentDetails?: {
-    paymentId?: string;
-    amount?: number;
-    status?: string;
-    cardDetails?: CardDetails; // Include full card details in request
+  paymentDetails: {
+    paymentId: string;
+    amount: number;
+    status: string;
+    cardDetails?: {
+      cardNumber: string;
+      expMonth: number;
+      expYear: number;
+      cardHolder: string;
+    };
   };
 }
 
@@ -91,37 +96,22 @@ export const subscriptionApi = api.injectEndpoints({
       transformResponse: (response: SubscriptionHistory[]) => {
         // Sort by date (newest first)
         return [...response].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
       },
     }),
     subscribe: builder.mutation<UserSubscription, SubscribeRequest>({
-      query: (data) => {
-        // Remove CVC before sending to server if card details exist
-        const sanitizedData = {
-          ...data,
-          paymentDetails: data.paymentDetails && {
-            ...data.paymentDetails,
-            cardDetails: data.paymentDetails.cardDetails && {
-              cardNumber: data.paymentDetails.cardDetails.cardNumber,
-              expMonth: data.paymentDetails.cardDetails.expMonth,
-              expYear: data.paymentDetails.cardDetails.expYear,
-              cardHolder: data.paymentDetails.cardDetails.cardHolder
-            }
-          }
-        };
-
-        return {
-          url: "subscriptions/subscribe",
-          method: "POST",
-          body: sanitizedData,
-        };
-      },
+      query: (data) => (
+        {
+        url: "subscriptions/subscribe",
+        method: "POST",
+        body: data,
+      }),
       invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
           const { data: subscription } = await queryFulfilled;
-
           // Force refetch current subscription and history after successful subscription
           await Promise.all([
             dispatch(
@@ -156,7 +146,7 @@ export const subscriptionApi = api.injectEndpoints({
       { paymentId: string }
     >({
       query: (data) => ({
- url: "subscriptions/verify",
+        url: "subscriptions/verify",
         method: "POST",
         body: data,
       }),
@@ -164,14 +154,14 @@ export const subscriptionApi = api.injectEndpoints({
     }),
     updateSubscriptionStatus: builder.mutation<
       void,
-      { status: 'active' | 'cancelled' | 'expired' }
+      { status: "active" | "cancelled" | "expired" }
     >({
       query: (data) => ({
-        url: 'subscriptions/status',
-        method: 'PUT',
+        url: "subscriptions/status",
+        method: "PUT",
         body: data,
       }),
-      invalidatesTags: ['CurrentSubscription'],
+      invalidatesTags: ["CurrentSubscription"],
     }),
     cancelSubscription: builder.mutation<void, void>({
       query: () => ({
@@ -202,5 +192,5 @@ export const {
   useVerifySubscriptionMutation,
   useCancelSubscriptionMutation,
   useChangeBillingCycleMutation,
-  useUpdateSubscriptionStatusMutation
+  useUpdateSubscriptionStatusMutation,
 } = subscriptionApi;
