@@ -5,6 +5,19 @@ const PAYMONGO_PUBLIC_KEY = import.meta.env.VITE_PAYMONGO_PUBLIC_KEY;
 const PAYMONGO_SECRET_KEY = import.meta.env.VITE_PAYMONGO_SECRET_KEY;
 const IS_DEVELOPMENT = import.meta.env.MODE === 'development';
 
+const handlePaymongoError = (error: any) => {
+  if (error.response?.data?.errors) {
+    const paymongoError = error.response.data.errors[0];
+    console.error('Paymongo API Error:', {
+      code: paymongoError.code,
+      detail: paymongoError.detail
+    });
+    throw new Error(paymongoError.detail);
+  }
+  throw error;
+};
+
+
 const paymongoAxios = axios.create({
   baseURL: PAYMONGO_API_URL,
   headers: {
@@ -73,21 +86,27 @@ export const createCustomer = async (email: string, name: string) => {
   }
 };
 
-export const createPaymentMethod = async ({ type, details, billing }: any) => {
+export const createPaymentMethod = async (paymentMethodData: any) => {
   try {
-    const response = await paymongoAxios.post('/payment_methods', {
-      data: {
-        attributes: {
-          type,
-          details,
-          billing
-        },
-      },
-    });
+    const response = await paymongoAxios.post(
+      '/payment_methods',
+      { data: { attributes: paymentMethodData } },
+    );
     return response.data.data;
   } catch (error) {
-    console.error('Error creating payment method:', error);
-    throw error;
+    return handlePaymongoError(error);
+  }
+};
+
+export const attachPaymentMethod = async (paymentMethodId: string) => {
+  try {
+    const response = await paymongoAxios.post(
+      `/payment_methods/${paymentMethodId}/attach`,
+      {},
+    );
+    return response.data.data;
+  } catch (error) {
+    return handlePaymongoError(error);
   }
 };
 
@@ -101,7 +120,6 @@ export const createPaymentIntent = async ({
   setupFutureUsage = true
 }: any) => {
   try {
-    // Create payment intent with setup for future usage
     const paymentIntentData: any = {
       data: {
         attributes: {
@@ -115,47 +133,82 @@ export const createPaymentIntent = async ({
           currency,
           description,
           statement_descriptor: 'POS System Subscription',
+          // Add payment method directly in the initial creation if provided
+          ...(paymentMethodId && { payment_method: paymentMethodId }),
         },
       },
     };
 
-    // Add setup_future_usage if needed
     if (setupFutureUsage && customerId) {
-      paymentIntentData.data.attributes.setup_future_usage = {
-        customer_id: customerId,
-        session_type: 'offline',
-      };
+      paymentIntentData.data.attributes.setup_future_usage = 'off_session';
+      paymentIntentData.data.attributes.customer = customerId;
     }
 
     const response = await paymongoAxios.post('/payment_intents', paymentIntentData);
     const paymentIntent = response.data.data;
 
-    // Attach payment method if provided
-    if (paymentMethodId) {
-      await paymongoAxios.post(`/payment_intents/${paymentIntent.id}/attach`, {
+    // No need to attach separately as it's included in the initial creation
+    return paymentIntent;
+  } catch (error) {
+    if (error.response?.data?.errors?.[0]?.code === 'parameter_attached_state') {
+      // If payment method is already attached, try to create a new payment intent without attachment
+      const retryResponse = await paymongoAxios.post('/payment_intents', {
         data: {
           attributes: {
-            payment_method: paymentMethodId,
-            client_key: PAYMONGO_PUBLIC_KEY,
-            return_url: `${window.location.origin}/subscription/success`
+            amount: Math.round(amount * 100),
+            payment_method_allowed: paymentMethodAllowed,
+            currency,
+            description,
+            statement_descriptor: 'POS System Subscription',
+            setup_future_usage: setupFutureUsage ? 'off_session' : undefined,
+            customer: customerId,
           },
         },
       });
+      return retryResponse.data.data;
     }
-
-    return paymentIntent;
-  } catch (error) {
-    console.error('Error creating/attaching payment intent:', error);
-    throw error;
+    return handlePaymongoError(error);
   }
 };
 
+export const attachPaymentMethodToIntent = async (paymentIntentId: string, paymentMethodId: string) => {
+  try {
+    const response = await paymongoAxios.post(`/payment_intents/${paymentIntentId}/attach`, {
+      data: {
+        attributes: {
+          payment_method: paymentMethodId,
+          client_key: PAYMONGO_PUBLIC_KEY,
+          return_url: `${window.location.origin}/subscription/success`
+        },
+      },
+    });
+    return response.data.data;
+  } catch (error) {
+    return handlePaymongoError(error);
+  }
+};
 export const getPaymentIntentStatus = async (paymentIntentId: string) => {
   try {
     const response = await paymongoAxios.get(`/payment_intents/${paymentIntentId}`);
     return response.data.data;
   } catch (error) {
     console.error('Error checking payment intent status:', error);
+    throw error;
+  }
+};
+
+export const confirmPaymentIntent = async (paymentIntentId: string, paymentMethodId: string) => {
+  try {
+    const response = await paymongoAxios.post(`/payment_intents/${paymentIntentId}/attach`, {
+      data: {
+        attributes: {
+          payment_method: paymentMethodId,
+        },
+      },
+    });
+    return response.data.data;
+  } catch (error) {
+    console.error('Error confirming payment intent:', error.response?.data || error);
     throw error;
   }
 };

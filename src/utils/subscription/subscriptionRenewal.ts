@@ -1,5 +1,4 @@
-import { addDays } from 'date-fns';
-import { createPaymentIntent, createPaymentMethod } from '../paymongo';
+import { createPaymentIntent, confirmPaymentIntent } from '../paymongo';
 import { store } from '../../store';
 import { subscriptionApi } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
@@ -33,86 +32,155 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
       };
     }
 
-    // Create payment intent with the saved payment method
-    const paymentIntent = await createPaymentIntent({
+    let paymentMethodId = currentSubscription.paymentDetails.paymentMethodId;
+
+    console.log('Creating payment intent with:', {
+      amount: details.amount,
+      paymentMethodId,
+      description: 'Subscription Auto Renewal',
+      currency: 'PHP',
+      setupFutureUsage: 'off_session'
+    });
+
+    // Create payment intent with the existing payment method
+    let paymentIntent = await createPaymentIntent({
       amount: details.amount,
       paymentMethodAllowed: ['card'],
-      paymentMethodId: currentSubscription.paymentDetails.paymentMethodId,
+      paymentMethodId: paymentMethodId,
       description: 'Subscription Auto Renewal',
       currency: 'PHP',
       setupFutureUsage: 'off_session' // Enable future usage without CVV
     });
 
-    if (paymentIntent.attributes.status === 'succeeded') {
-      // Update subscription with new payment
-      await store.dispatch(
-        subscriptionApi.endpoints.subscribe.initiate({
-          subscriptionId: details.subscriptionId,
-          paymentMethod: 'card',
-          billingCycle: details.billingCycle,
-          autoRenew: true,
-          paymentDetails: {
+    console.log('Payment intent created:', paymentIntent);
+
+    // Handle different payment intent statuses
+    switch (paymentIntent.attributes.status) {
+      case 'succeeded':
+        // Update subscription with new payment
+        await store.dispatch(
+          subscriptionApi.endpoints.subscribe.initiate({
+            subscriptionId: details.subscriptionId,
+            paymentMethod: 'card',
+            billingCycle: details.billingCycle,
+            autoRenew: true,
+            paymentDetails: {
+              paymentId: paymentIntent.id,
+              amount: details.amount,
+              status: 'completed',
+              paymentMethodId: paymentMethodId,
+              cardDetails: currentSubscription.paymentDetails.cardDetails
+            },
+          })
+        ).unwrap();
+
+        await createNotification(
+          store.dispatch,
+          'Your subscription has been automatically renewed.',
+          'system'
+        );
+
+        toast.success('Subscription renewed successfully');
+
+        return {
+          success: true,
+          paymentId: paymentIntent.id,
+          status: 'completed',
+        };
+
+      case 'awaiting_payment_method':
+        // Attempt to confirm the payment intent
+        paymentIntent = await confirmPaymentIntent(paymentIntent.id, paymentMethodId);
+        
+        if (paymentIntent.attributes.status === 'succeeded') {
+          // Handle successful confirmation similarly to the 'succeeded' case
+          // (You might want to extract this into a separate function to avoid code duplication)
+          await store.dispatch(
+            subscriptionApi.endpoints.subscribe.initiate({
+              subscriptionId: details.subscriptionId,
+              paymentMethod: 'card',
+              billingCycle: details.billingCycle,
+              autoRenew: true,
+              paymentDetails: {
+                paymentId: paymentIntent.id,
+                amount: details.amount,
+                status: 'completed',
+                paymentMethodId: paymentMethodId,
+                cardDetails: currentSubscription.paymentDetails.cardDetails
+              },
+            })
+          ).unwrap();
+
+          await createNotification(
+            store.dispatch,
+            'Your subscription has been automatically renewed.',
+            'system'
+          );
+
+          toast.success('Subscription renewed successfully');
+
+          return {
+            success: true,
             paymentId: paymentIntent.id,
-            amount: details.amount,
             status: 'completed',
-            paymentMethodId: currentSubscription.paymentDetails.paymentMethodId,
-            cardDetails: currentSubscription.paymentDetails.cardDetails
-          },
-        })
-      ).unwrap();
+          };
+        } else {
+          throw new Error(`Payment confirmation failed. Status: ${paymentIntent.attributes.status}`);
+        }
 
-      await createNotification(
-        store.dispatch,
-        'Your subscription has been automatically renewed.',
-        'system'
-      );
+      case 'requires_action':
+        // Handle 3D Secure authentication if required
+        await createNotification(
+          store.dispatch,
+          'Your subscription renewal requires additional authentication. Please check your email or login to complete the process.',
+          'alert'
+        );
+        return {
+          success: false,
+          status: 'requires_action',
+          message: 'Additional authentication required for renewal',
+        };
 
-      toast.success('Subscription renewed successfully');
-
-      return {
-        success: true,
-        paymentId: paymentIntent.id,
-        status: 'completed',
-      };
+      default:
+        // Handle other non-success statuses
+        throw new Error(`Unexpected payment intent status: ${paymentIntent.attributes.status}`);
     }
-
-    throw new Error('Payment failed');
   } catch (error) {
     console.error('Auto-renewal failed:', error);
     
-    await createNotification(
-      store.dispatch,
-      'Automatic subscription renewal failed. Please update your payment method or renew manually.',
-      'alert'
-    );
+    if (error.response && error.response.data && error.response.data.errors) {
+      const paymongoError = error.response.data.errors[0];
+      if (paymongoError.code === 'parameter_attached_state') {
+        // Handle the specific error for already attached payment method
+        await createNotification(
+          store.dispatch,
+          'Auto-renewal failed: Payment method is already attached. Please update your payment method.',
+          'alert'
+        );
+      } else {
+        // Handle other Paymongo errors
+        await createNotification(
+          store.dispatch,
+          `Auto-renewal failed: ${paymongoError.detail}`,
+          'alert'
+        );
+      }
+    } else {
+      // Handle general errors
+      await createNotification(
+        store.dispatch,
+        'Automatic subscription renewal failed. Please update your payment method or renew manually.',
+        'alert'
+      );
+    }
 
     toast.error('Failed to renew subscription');
 
     return {
       success: false,
       status: 'failed',
-      message: 'Failed to process auto-renewal',
+      message: error.message || 'Failed to process auto-renewal',
     };
   }
 };
 
-export const scheduleAutoRenewal = (details: RenewalDetails, daysBeforeExpiry: number = 3) => {
-  const now = new Date();
-  const renewalDate = new Date();
-  renewalDate.setDate(renewalDate.getDate() + (details.billingCycle === 'yearly' ? 362 : 27)); // 3 days before expiry
-
-  const timeUntilRenewal = renewalDate.getTime() - now.getTime();
-  
-  if (timeUntilRenewal > 0) {
-    setTimeout(async () => {
-      const result = await handleAutoRenewal(details);
-      
-      if (!result.success) {
-        // Retry once after 24 hours if failed
-        setTimeout(async () => {
-          await handleAutoRenewal(details);
-        }, 24 * 60 * 60 * 1000);
-      }
-    }, timeUntilRenewal);
-  }
-};
