@@ -1,5 +1,20 @@
 import { api } from "../api";
 
+export interface CardDetails {
+  cardNumber: string;
+  expMonth: number;
+  expYear: number;
+  cvc: string;
+  cardHolder: string;
+}
+
+export interface PaymentDetails {
+  paymentId?: string;
+  amount?: number;
+  status?: string;
+  cardDetails?: Omit<CardDetails, 'cvc'>;
+}
+
 export interface Subscription {
   _id: string;
   name: "free" | "basic" | "premium";
@@ -23,11 +38,7 @@ export interface UserSubscription {
   autoRenew: boolean;
   billingCycle: "monthly" | "yearly";
   paymentMethod: string;
-  paymentDetails?: {
-    paymentId?: string;
-    amount?: number;
-    status?: string;
-  };
+  paymentDetails?: PaymentDetails;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,6 +71,7 @@ export interface SubscribeRequest {
     paymentId?: string;
     amount?: number;
     status?: string;
+    cardDetails?: CardDetails;
   };
 }
 
