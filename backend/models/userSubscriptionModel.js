@@ -64,7 +64,8 @@ const userSubscriptionSchema = new mongoose.Schema({
     paymentId: String,
     amount: Number,
     status: String,
-    cardDetails: cardDetailsSchema
+    cardDetails: cardDetailsSchema,
+    paymentMethodId: String,
   }
 }, {
   timestamps: true

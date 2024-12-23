@@ -13,6 +13,7 @@ export interface PaymentDetails {
   amount?: number;
   status?: string;
   cardDetails?: Omit<CardDetails, "cvc">; // Never store CVC
+  paymentMethodId?: string;
 }
 
 export interface Subscription {
@@ -77,6 +78,7 @@ export interface SubscribeRequest {
       expYear: number;
       cardHolder: string;
     };
+    paymentMethodId: string;
   };
 }
 

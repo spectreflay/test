@@ -9,73 +9,42 @@ interface RenewalDetails {
   subscriptionId: string;
   amount: number;
   billingCycle: 'monthly' | 'yearly';
-  cardDetails?: {
-    cardNumber: string;
-    expMonth: number;
-    expYear: number;
-    cvc: string;
-    cardHolder: string;
-  };
 }
 
 export const handleAutoRenewal = async (details: RenewalDetails) => {
   try {
-    // Check if we have card details in the subscription's paymentDetails
+    // Get current subscription
     const { data: currentSubscription } = await store.dispatch(
       subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
         forceRefetch: true
       })
     );
 
-    // If no card details are stored, we can't auto-renew
-    if (!currentSubscription?.paymentDetails?.cardDetails) {
+    if (!currentSubscription?.paymentDetails?.paymentMethodId) {
       await createNotification(
         store.dispatch,
-        'Unable to process auto-renewal: Card details not found. Please update your payment method.',
+        'Unable to process auto-renewal: Payment method not found.',
         'alert'
       );
       return {
         success: false,
-        status: 'card_details_missing',
-        message: 'Card details not found for auto-renewal',
+        status: 'payment_method_missing',
+        message: 'Payment method not found for auto-renewal',
       };
     }
 
-    // Use stored card details for renewal
-    const cardDetails = currentSubscription.paymentDetails.cardDetails;
-
-    // Create payment method
-    const paymentMethod = await createPaymentMethod({
-      type: 'card',
-      details: {
-        card_number: cardDetails.cardNumber,
-        exp_month: cardDetails.expMonth,
-        exp_year: cardDetails.expYear,
-        cvc: cardDetails.cvc,
-      },
-      billing: {
-        name: cardDetails.cardHolder,
-        email: currentSubscription.user.email, // Use the user's email from subscription
-      },
-    });
-
-    // Create payment intent
+    // Create payment intent with the saved payment method
     const paymentIntent = await createPaymentIntent({
       amount: details.amount,
       paymentMethodAllowed: ['card'],
-      paymentMethodId: paymentMethod.id,
+      paymentMethodId: currentSubscription.paymentDetails.paymentMethodId,
       description: 'Subscription Auto Renewal',
       currency: 'PHP',
+      setupFutureUsage: 'off_session' // Enable future usage without CVV
     });
 
     if (paymentIntent.attributes.status === 'succeeded') {
-      // Calculate new subscription dates
-      const startDate = new Date();
-      const endDate = details.billingCycle === 'yearly' 
-        ? addDays(startDate, 365)
-        : addDays(startDate, 30);
-
-      // Update subscription
+      // Update subscription with new payment
       await store.dispatch(
         subscriptionApi.endpoints.subscribe.initiate({
           subscriptionId: details.subscriptionId,
@@ -86,12 +55,12 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
             paymentId: paymentIntent.id,
             amount: details.amount,
             status: 'completed',
-            cardDetails: cardDetails, // Store card details for future renewals
+            paymentMethodId: currentSubscription.paymentDetails.paymentMethodId,
+            cardDetails: currentSubscription.paymentDetails.cardDetails
           },
         })
       ).unwrap();
 
-      // Notify user
       await createNotification(
         store.dispatch,
         'Your subscription has been automatically renewed.',
@@ -105,13 +74,12 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
         paymentId: paymentIntent.id,
         status: 'completed',
       };
-    } else {
-      throw new Error('Payment failed');
     }
+
+    throw new Error('Payment failed');
   } catch (error) {
     console.error('Auto-renewal failed:', error);
     
-    // Notify user of failed renewal
     await createNotification(
       store.dispatch,
       'Automatic subscription renewal failed. Please update your payment method or renew manually.',

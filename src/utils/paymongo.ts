@@ -74,7 +74,11 @@ export const createPaymentMethod = async ({ type, details, billing }: any) => {
   }
 };
 
-export const createPaymentIntent = async ({ amount, paymentMethodAllowed, paymentMethodId, description, currency = 'PHP' }: any) => {
+// const setupFutureUsage = {
+//   // Example options, adjust according to your needs
+//   usage: 'off_session', // or 'on_session'
+// };
+export const createPaymentIntent = async ({ amount, paymentMethodAllowed, paymentMethodId, description, currency = 'PHP', setupFutureUsage = {usage: 'off_session'} }: any) => {
   try {
     // Create payment intent
     const response = await paymongoAxios.post('/payment_intents', {
@@ -82,27 +86,29 @@ export const createPaymentIntent = async ({ amount, paymentMethodAllowed, paymen
         attributes: {
           amount: Math.round(amount * 100),
           payment_method_allowed: paymentMethodAllowed,
-          payment_method_options: {
-            card: { request_three_d_secure: 'any' },
+          payment_method_options: { 
+            card: { 
+              request_three_d_secure: 'any' 
+            } 
           },
           currency,
-          description: IS_DEVELOPMENT 
-            ? 'Test payment - Development Mode'
-            : description,
+          description,
           statement_descriptor: 'POS System Subscription',
+          setup_future_usage: setupFutureUsage // Pass as an object
         },
       },
     });
 
     const paymentIntent = response.data.data;
 
-    // Attach payment method to payment intent
+    // Attach payment method if provided
     if (paymentMethodId) {
       await paymongoAxios.post(`/payment_intents/${paymentIntent.id}/attach`, {
         data: {
           attributes: {
             payment_method: paymentMethodId,
             client_key: PAYMONGO_PUBLIC_KEY,
+            return_url: `${window.location.origin}/subscription/success`
           },
         },
       });
