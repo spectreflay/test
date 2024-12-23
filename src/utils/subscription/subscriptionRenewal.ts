@@ -20,32 +20,42 @@ interface RenewalDetails {
 
 export const handleAutoRenewal = async (details: RenewalDetails) => {
   try {
-    if (!details.cardDetails) {
-      // For e-wallet payments, we can't auto-renew
+    // Check if we have card details in the subscription's paymentDetails
+    const { data: currentSubscription } = await store.dispatch(
+      subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
+        forceRefetch: true
+      })
+    );
+
+    // If no card details are stored, we can't auto-renew
+    if (!currentSubscription?.paymentDetails?.cardDetails) {
       await createNotification(
         store.dispatch,
-        'Your subscription requires manual renewal as it was paid via e-wallet.',
+        'Unable to process auto-renewal: Card details not found. Please update your payment method.',
         'alert'
       );
       return {
         success: false,
-        status: 'manual_renewal_required',
-        message: 'E-wallet payments require manual renewal',
+        status: 'card_details_missing',
+        message: 'Card details not found for auto-renewal',
       };
     }
+
+    // Use stored card details for renewal
+    const cardDetails = currentSubscription.paymentDetails.cardDetails;
 
     // Create payment method
     const paymentMethod = await createPaymentMethod({
       type: 'card',
       details: {
-        card_number: details.cardDetails.cardNumber,
-        exp_month: details.cardDetails.expMonth,
-        exp_year: details.cardDetails.expYear,
-        cvc: details.cardDetails.cvc,
+        card_number: cardDetails.cardNumber,
+        exp_month: cardDetails.expMonth,
+        exp_year: cardDetails.expYear,
+        cvc: cardDetails.cvc,
       },
       billing: {
-        name: details.cardDetails.cardHolder,
-        email: 'customer@example.com', // Get from user profile
+        name: cardDetails.cardHolder,
+        email: currentSubscription.user.email, // Use the user's email from subscription
       },
     });
 
@@ -76,6 +86,7 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
             paymentId: paymentIntent.id,
             amount: details.amount,
             status: 'completed',
+            cardDetails: cardDetails, // Store card details for future renewals
           },
         })
       ).unwrap();

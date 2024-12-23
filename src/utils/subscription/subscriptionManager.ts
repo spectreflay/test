@@ -4,23 +4,6 @@ import { subscriptionApi, UserSubscription } from '../../store/services/subscrip
 import { createNotification } from '../notification';
 import { SUBSCRIPTION_FEATURES } from './subscriptionFeatures';
 import { handleAutoRenewal } from './subscriptionRenewal';
-import { createPaymentIntent, createPaymentMethod, getPaymentIntentStatus } from '../paymongo';
-import { toast } from 'react-hot-toast';
-
-interface RenewalDetails {
-    subscriptionId: string;
-    amount: number;
-    billingCycle: 'monthly' | 'yearly';
-    paymentDetails?: {
-      paymentMethodId?: string;  // Store the PayMongo payment method ID
-      cardDetails?: {
-        cardNumber: string;
-        expMonth: number;
-        expYear: number;
-        cvc: string;
-      };
-    };
-  }
 
 class SubscriptionManager {
   private static instance: SubscriptionManager;
