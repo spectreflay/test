@@ -15,13 +15,12 @@ const paymongoAxios = axios.create({
 
 export const createSource = async (amount: number, type: 'gcash' | 'grab_pay' | 'paymaya') => {
   try {
-    // Convert type 'paymaya' to 'paymaya' for the API
     const sourceType = type === 'paymaya' ? 'paymaya' : type;
     
     const response = await paymongoAxios.post('/sources', {
       data: {
         attributes: {
-          amount: Math.round(amount * 100), // Convert to cents
+          amount: Math.round(amount * 100),
           currency: 'PHP',
           type: sourceType,
           redirect: {
@@ -56,6 +55,24 @@ export const getSourceStatus = async (sourceId: string) => {
   }
 };
 
+// Create a customer for recurring payments
+export const createCustomer = async (email: string, name: string) => {
+  try {
+    const response = await paymongoAxios.post('/customers', {
+      data: {
+        attributes: {
+          email,
+          name,
+        },
+      },
+    });
+    return response.data.data;
+  } catch (error) {
+    console.error('Error creating customer:', error);
+    throw error;
+  }
+};
+
 export const createPaymentMethod = async ({ type, details, billing }: any) => {
   try {
     const response = await paymongoAxios.post('/payment_methods', {
@@ -74,14 +91,18 @@ export const createPaymentMethod = async ({ type, details, billing }: any) => {
   }
 };
 
-// const setupFutureUsage = {
-//   // Example options, adjust according to your needs
-//   usage: 'off_session', // or 'on_session'
-// };
-export const createPaymentIntent = async ({ amount, paymentMethodAllowed, paymentMethodId, description, currency = 'PHP', setupFutureUsage = {usage: 'off_session'} }: any) => {
+export const createPaymentIntent = async ({ 
+  amount, 
+  paymentMethodAllowed, 
+  paymentMethodId, 
+  description, 
+  currency = 'PHP',
+  customerId,
+  setupFutureUsage = true
+}: any) => {
   try {
-    // Create payment intent
-    const response = await paymongoAxios.post('/payment_intents', {
+    // Create payment intent with setup for future usage
+    const paymentIntentData: any = {
       data: {
         attributes: {
           amount: Math.round(amount * 100),
@@ -94,11 +115,19 @@ export const createPaymentIntent = async ({ amount, paymentMethodAllowed, paymen
           currency,
           description,
           statement_descriptor: 'POS System Subscription',
-          setup_future_usage: setupFutureUsage // Pass as an object
         },
       },
-    });
+    };
 
+    // Add setup_future_usage if needed
+    if (setupFutureUsage && customerId) {
+      paymentIntentData.data.attributes.setup_future_usage = {
+        customer_id: customerId,
+        session_type: 'offline',
+      };
+    }
+
+    const response = await paymongoAxios.post('/payment_intents', paymentIntentData);
     const paymentIntent = response.data.data;
 
     // Attach payment method if provided
