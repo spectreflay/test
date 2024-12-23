@@ -39,6 +39,7 @@ import ResendVerification from "./pages/ResendVerification";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import SubscriptionRestrictedRoute from "./components/subscription/subscriptionRestrictedRoute";
+import { subscriptionManager } from "./utils/subscription/subscriptionManager";
 
 function App() {
   const { token, staff } = useSelector((state: RootState) => state.auth);
@@ -54,6 +55,12 @@ function App() {
       }
     }
   }, [token, staff, navigate, location.pathname]);
+  useEffect(() => {
+    // Cleanup subscription manager on unmount
+    return () => {
+      subscriptionManager.cleanup();
+    };
+  }, []);
 
   return (
     <ThemeProvider>
@@ -80,7 +87,7 @@ function App() {
               <Layout />
             </ProtectedRoute>
           }
-        >    
+        >
           {/* Basic routes available even with expired subscription */}
           <Route path="dashboard" element={<Dashboard />} />
           <Route
@@ -119,7 +126,9 @@ function App() {
             <Route
               path="settings"
               element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_SETTINGS}>
+                <ProtectedRoute
+                  requiredPermission={PERMISSIONS.MANAGE_SETTINGS}
+                >
                   <Settings />
                 </ProtectedRoute>
               }
@@ -127,7 +136,9 @@ function App() {
             <Route
               path="categories"
               element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
+                <ProtectedRoute
+                  requiredPermission={PERMISSIONS.MANAGE_INVENTORY}
+                >
                   <Categories />
                 </ProtectedRoute>
               }
@@ -135,7 +146,9 @@ function App() {
             <Route
               path="products"
               element={
-                <SubscriptionRestrictedRoute requiredFeature={PERMISSIONS.MANAGE_INVENTORY}>
+                <SubscriptionRestrictedRoute
+                  requiredFeature={PERMISSIONS.MANAGE_INVENTORY}
+                >
                   <Products />
                 </SubscriptionRestrictedRoute>
               }
@@ -143,7 +156,9 @@ function App() {
             <Route
               path="inventory"
               element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
+                <ProtectedRoute
+                  requiredPermission={PERMISSIONS.MANAGE_INVENTORY}
+                >
                   <Inventory />
                 </ProtectedRoute>
               }
@@ -159,7 +174,9 @@ function App() {
             <Route
               path="discounts"
               element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
+                <ProtectedRoute
+                  requiredPermission={PERMISSIONS.MANAGE_INVENTORY}
+                >
                   <Discounts />
                 </ProtectedRoute>
               }
@@ -189,4 +206,3 @@ function App() {
 }
 
 export default App;
-

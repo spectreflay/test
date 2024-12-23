@@ -1,8 +1,8 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useGetCurrentSubscriptionQuery } from '../../store/services/subscriptionService';
-import { isSubscriptionExpired } from '../../utils/subscription/subscriptionStatus';
-import { canAccessFeatureWithSubscription } from '../../utils/subscription/subscriptionRestrictions';
+import { canAccessFeatureWithSubscription, getSubscriptionStatus } from '../../utils/subscription/subscriptionRestrictions';
+import { subscriptionManager } from '../../utils/subscription/subscriptionManager';
 
 interface SubscriptionRestrictedRouteProps {
   children: React.ReactNode;
@@ -16,16 +16,16 @@ const SubscriptionRestrictedRoute: React.FC<SubscriptionRestrictedRouteProps> = 
   const { data: subscription } = useGetCurrentSubscriptionQuery();
   const location = useLocation();
 
-  // If no feature is required, just check if subscription is active
-  if (!requiredFeature) {
-    if (!subscription || isSubscriptionExpired(subscription.endDate)) {
-      return <Navigate to="/subscription" state={{ from: location }} replace />;
-    }
-    return <>{children}</>;
+  // Get subscription status using SubscriptionManager
+  const subscriptionStatus = subscription ? subscriptionManager.getSubscriptionDetails(subscription) : null;
+
+  // If no subscription status, redirect to subscription page
+  if (!subscriptionStatus || subscriptionStatus.isExpired) {
+    return <Navigate to="/subscription" state={{ from: location }} replace />;
   }
 
-  // Check if user can access the specific feature
-  if (!canAccessFeatureWithSubscription(subscription, requiredFeature)) {
+  // If a specific feature is required, check access
+  if (requiredFeature && !canAccessFeatureWithSubscription(subscription, requiredFeature)) {
     return <Navigate to="/subscription" state={{ from: location }} replace />;
   }
 

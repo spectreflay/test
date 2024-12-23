@@ -1,34 +1,35 @@
-// src/components/subscription/SubscriptionExpirationAlert.tsx
 import React from 'react';
 import { AlertTriangle, CreditCard } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { isSubscriptionExpired, isNearExpiration } from '../../utils/subscription/subscriptionStatus';
+import { subscriptionManager } from '../../utils/subscription/subscriptionManager';
+import { UserSubscription } from '../../store/services/subscriptionService'; // Import the UserSubscription type
 
 interface SubscriptionExpirationAlertProps {
-  subscription: {
-    endDate?: string;
-    autoRenew: boolean;
-    paymentMethod: string;
-  };
+  subscription: UserSubscription; // Use the UserSubscription type directly
 }
 
 const SubscriptionExpirationAlert: React.FC<SubscriptionExpirationAlertProps> = ({ subscription }) => {
-  const expired = isSubscriptionExpired(subscription.endDate);
-  const nearExpiration = isNearExpiration(subscription.endDate);
+  // Ensure endDate is defined
+  const endDate = subscription.endDate || ''; // Default to an empty string if undefined
+
+  // Get subscription details using SubscriptionManager
+  const { isExpired, isNearExpiration } = subscriptionManager.getSubscriptionDetails(subscription);
+
   const isEwallet = ['gcash', 'grab_pay', 'maya'].includes(subscription.paymentMethod);
 
-  if (!expired && !nearExpiration) return null;
+  // If the subscription is neither expired nor near expiration, return null
+  if (!isExpired && !isNearExpiration) return null;
 
   return (
-    <div className={`p-4 rounded-lg ${expired ? 'bg-red-50' : 'bg-yellow-50'}`}>
+    <div className={`p-4 rounded-lg ${isExpired ? 'bg-red-50' : 'bg-yellow-50'}`}>
       <div className="flex items-start">
-        <AlertTriangle className={`h-5 w-5 ${expired ? 'text-red-400' : 'text-yellow-400'}`} />
+        <AlertTriangle className={`h-5 w-5 ${isExpired ? 'text-red-400' : 'text-yellow-400'}`} />
         <div className="ml-3">
-          <h3 className={`text-sm font-medium ${expired ? 'text-red-800' : 'text-yellow-800'}`}>
-            {expired ? 'Subscription Expired' : 'Subscription Expiring Soon'}
+          <h3 className={`text-sm font-medium ${isExpired ? 'text-red-800' : 'text-yellow-800'}`}>
+            {isExpired ? 'Subscription Expired' : 'Subscription Expiring Soon'}
           </h3>
           <div className="mt-2 text-sm">
-            {expired ? (
+            {isExpired ? (
               isEwallet ? (
                 <p>Your subscription has expired. Please manually renew your subscription.</p>
               ) : (

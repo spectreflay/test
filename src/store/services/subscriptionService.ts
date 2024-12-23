@@ -134,6 +134,17 @@ export const subscriptionApi = api.injectEndpoints({
       }),
       invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
     }),
+    updateSubscriptionStatus: builder.mutation<
+      void,
+      { status: 'active' | 'cancelled' | 'expired' }
+    >({
+      query: (data) => ({
+        url: 'subscriptions/status',
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['CurrentSubscription'],
+    }),
     cancelSubscription: builder.mutation<void, void>({
       query: () => ({
         url: "subscriptions/cancel",
@@ -163,4 +174,5 @@ export const {
   useVerifySubscriptionMutation,
   useCancelSubscriptionMutation,
   useChangeBillingCycleMutation,
+  useUpdateSubscriptionStatusMutation
 } = subscriptionApi;

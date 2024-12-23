@@ -1,5 +1,5 @@
 import { UserSubscription } from "../../store/services/subscriptionService";
-import { isSubscriptionExpired } from "./subscriptionStatus";
+import { subscriptionManager } from "./subscriptionManager";
 
 // Define feature access based on subscription status
 export const canAccessFeatureWithSubscription = (
@@ -9,14 +9,17 @@ export const canAccessFeatureWithSubscription = (
   // If no subscription exists, deny access
   if (!subscription) return false;
 
+  // Get the current subscription details from the SubscriptionManager
+  const { isExpired, features } = subscriptionManager.getSubscriptionDetails(subscription);
+
   // If subscription is expired, only allow access to basic features
-  if (isSubscriptionExpired(subscription.endDate)) {
+  if (isExpired) {
     const basicFeatures = ['basic_reports', 'basic_inventory'];
     return basicFeatures.includes(feature);
   }
 
   // If subscription is active, check if feature is included
-  return subscription.subscription.features.includes(feature);
+  return features.includes(feature);
 };
 
 // Check if user has exceeded their subscription limits
@@ -25,10 +28,14 @@ export const hasExceededLimit = (
   limitType: 'products' | 'staff' | 'stores',
   currentCount: number
 ): boolean => {
+  // If no subscription exists, assume limits are exceeded
   if (!subscription) return true;
 
+  // Get the current subscription details from the SubscriptionManager
+  const { isExpired, limits } = subscriptionManager.getSubscriptionDetails(subscription);
+
   // If subscription is expired, use free tier limits
-  if (isSubscriptionExpired(subscription.endDate)) {
+  if (isExpired) {
     const freeLimits = {
       products: 10,
       staff: 2,
@@ -37,12 +44,7 @@ export const hasExceededLimit = (
     return currentCount >= freeLimits[limitType];
   }
 
-  const limits = {
-    products: subscription.subscription.maxProducts,
-    staff: subscription.subscription.maxStaff,
-    stores: subscription.subscription.maxStores
-  };
-
+  // Check against the subscription limits
   return currentCount >= limits[limitType];
 };
 
@@ -50,13 +52,17 @@ export const hasExceededLimit = (
 export const getSubscriptionStatus = (
   subscription: UserSubscription | undefined
 ): { tier: string; isExpired: boolean; expiryDate: string | null } => {
+  // If no subscription exists, return default values
   if (!subscription) {
     return { tier: 'none', isExpired: true, expiryDate: null };
   }
 
+  // Get the current subscription details from the SubscriptionManager
+  const { tier, isExpired, expiryDate } = subscriptionManager.getSubscriptionDetails(subscription);
+
   return {
-    tier: subscription.subscription.name,
-    isExpired: isSubscriptionExpired(subscription.endDate),
-    expiryDate: subscription.endDate || null
+    tier,
+    isExpired,
+    expiryDate
   };
 };
