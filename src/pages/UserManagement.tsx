@@ -16,7 +16,7 @@ import {
   useDeleteStaffMutation,
 } from "../store/services/staffService";
 import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionService";
-import { checkSubscriptionLimit } from "../utils/subscriptionLimits";
+import { checkSubscriptionLimit } from "../utils/subscription/subscriptionLimits";
 import UpgradeModal from "../components/subscription/UpgradeModal";
 
 interface RoleForm {

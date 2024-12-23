@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { FeatureLimit } from '../../utils/subscriptionLimits';
+import { FeatureLimit } from '../../utils/subscription/subscriptionLimits';
 
 interface SubscriptionLimitAlertProps {
   featureLimit: FeatureLimit;

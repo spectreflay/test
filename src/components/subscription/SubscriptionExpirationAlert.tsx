@@ -2,7 +2,7 @@
 import React from 'react';
 import { AlertTriangle, CreditCard } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { isSubscriptionExpired, isNearExpiration } from '../../utils/subscriptionStatus';
+import { isSubscriptionExpired, isNearExpiration } from '../../utils/subscription/subscriptionStatus';
 
 interface SubscriptionExpirationAlertProps {
   subscription: {

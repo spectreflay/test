@@ -38,6 +38,7 @@ import EmailVerification from "./pages/EmailVerification";
 import ResendVerification from "./pages/ResendVerification";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import SubscriptionRestrictedRoute from "./components/subscription/subscriptionRestrictedRoute";
 
 function App() {
   const { token, staff } = useSelector((state: RootState) => state.auth);
@@ -79,7 +80,9 @@ function App() {
               <Layout />
             </ProtectedRoute>
           }
-        >
+        >    
+          {/* Basic routes available even with expired subscription */}
+          <Route path="dashboard" element={<Dashboard />} />
           <Route
             index
             element={
@@ -132,9 +135,9 @@ function App() {
             <Route
               path="products"
               element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
+                <SubscriptionRestrictedRoute requiredFeature={PERMISSIONS.MANAGE_INVENTORY}>
                   <Products />
-                </ProtectedRoute>
+                </SubscriptionRestrictedRoute>
               }
             />
             <Route

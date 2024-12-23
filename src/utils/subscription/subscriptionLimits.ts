@@ -1,6 +1,6 @@
 import { toast } from "react-hot-toast";
 import { SUBSCRIPTION_FEATURES } from "./subscriptionFeatures";
-import { UserSubscription } from "../store/services/subscriptionService";
+import { UserSubscription } from "../../store/services/subscriptionService";
 
 export type FeatureLimit = {
   name: string;

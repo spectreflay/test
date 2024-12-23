@@ -10,7 +10,7 @@ import {
   useDeleteProductMutation,
 } from "../store/services/productService";
 import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionService";
-import { checkSubscriptionLimit } from "../utils/subscriptionLimits";
+import { checkSubscriptionLimit } from "../utils/subscription/subscriptionLimits";
 import ProductForm from "../components/products/ProductForm";
 import ImportExportButtons from "../components/products/ImportExportButtons";
 import UpgradeModal from "../components/subscription/UpgradeModal";

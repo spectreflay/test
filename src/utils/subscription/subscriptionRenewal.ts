@@ -1,4 +1,4 @@
-import { createPaymentIntent, createPaymentMethod } from './paymongo';
+import { createPaymentIntent, createPaymentMethod } from '../paymongo';
 import { toast } from 'react-hot-toast';
 
 interface RenewalDetails {

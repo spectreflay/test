@@ -1,5 +1,5 @@
 import React from 'react';
-import { FeatureLimit } from '../../utils/subscriptionLimits';
+import { FeatureLimit } from '../../utils/subscription/subscriptionLimits';
 
 interface FeatureLimitProgressProps {
   featureLimit: FeatureLimit;

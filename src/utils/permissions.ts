@@ -1,3 +1,7 @@
+
+import { canAccessFeatureWithSubscription } from './subscription/subscriptionRestrictions';
+import { useGetCurrentSubscriptionQuery } from '../store/services/subscriptionService';
+
 export type Permission = {
   name: string;
   module: 'sales' | 'inventory' | 'reports' | 'users' | 'settings';
@@ -14,9 +18,17 @@ export const PERMISSIONS = {
 };
 
 export const hasPermission = (userPermissions: Permission[], requiredPermission: string): boolean => {
+    // Get current subscription
+    const { data: subscription } = useGetCurrentSubscriptionQuery();
+
+    // First check if user has permission based on subscription
+    if (!canAccessFeatureWithSubscription(subscription, requiredPermission)) {
+      return false;
+    }
   return userPermissions.some(permission => permission.name === requiredPermission);
 };
 
 export const getModulePermissions = (userPermissions: Permission[], module: string): Permission[] => {
   return userPermissions.filter(permission => permission.module === module);
 };
+

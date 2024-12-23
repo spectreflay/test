@@ -1,7 +1,7 @@
 // src/utils/subscriptionMiddleware.ts
 import { handleAutoRenewal } from './subscriptionRenewal';
-import { createNotification } from './notification';
-import { store } from '../store';
+import { createNotification } from '../notification';
+import { store } from '../../store';
 
 export const handleSubscriptionExpiration = async (subscription: any) => {
   if (!subscription.endDate) return;

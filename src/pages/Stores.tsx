@@ -13,7 +13,7 @@ import { useGetCurrentSubscriptionQuery } from "../store/services/subscriptionSe
 import {
   checkSubscriptionLimit,
   showUpgradePrompt,
-} from "../utils/subscriptionLimits";
+} from "../utils/subscription/subscriptionLimits";
 import UpgradeModal from "../components/subscription/UpgradeModal";
 
 interface EditStoreForm {
