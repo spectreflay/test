@@ -4,7 +4,7 @@ export interface CardDetails {
   cardNumber: string;
   expMonth: number;
   expYear: number;
-  cvc: string;
+  cvc?: string; // Optional since we don't store this
   cardHolder: string;
 }
 
@@ -12,7 +12,7 @@ export interface PaymentDetails {
   paymentId?: string;
   amount?: number;
   status?: string;
-  cardDetails?: Omit<CardDetails, 'cvc'>;
+  cardDetails?: Omit<CardDetails, 'cvc'>; // Never store CVC
 }
 
 export interface Subscription {
@@ -71,7 +71,7 @@ export interface SubscribeRequest {
     paymentId?: string;
     amount?: number;
     status?: string;
-    cardDetails?: CardDetails;
+    cardDetails?: CardDetails; // Include full card details in request
   };
 }
 
@@ -96,11 +96,27 @@ export const subscriptionApi = api.injectEndpoints({
       },
     }),
     subscribe: builder.mutation<UserSubscription, SubscribeRequest>({
-      query: (data) => ({
-        url: "subscriptions/subscribe",
-        method: "POST",
-        body: data,
-      }),
+      query: (data) => {
+        // Remove CVC before sending to server if card details exist
+        const sanitizedData = {
+          ...data,
+          paymentDetails: data.paymentDetails && {
+            ...data.paymentDetails,
+            cardDetails: data.paymentDetails.cardDetails && {
+              cardNumber: data.paymentDetails.cardDetails.cardNumber,
+              expMonth: data.paymentDetails.cardDetails.expMonth,
+              expYear: data.paymentDetails.cardDetails.expYear,
+              cardHolder: data.paymentDetails.cardDetails.cardHolder
+            }
+          }
+        };
+
+        return {
+          url: "subscriptions/subscribe",
+          method: "POST",
+          body: sanitizedData,
+        };
+      },
       invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
@@ -140,7 +156,7 @@ export const subscriptionApi = api.injectEndpoints({
       { paymentId: string }
     >({
       query: (data) => ({
-        url: "subscriptions/verify",
+ url: "subscriptions/verify",
         method: "POST",
         body: data,
       }),
