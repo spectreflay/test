@@ -1,8 +1,26 @@
-import { addMinutes } from 'date-fns';
+import { addDays, addMinutes } from 'date-fns';
 import { store } from '../../store';
 import { subscriptionApi, UserSubscription } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
 import { SUBSCRIPTION_FEATURES } from './subscriptionFeatures';
+import { handleAutoRenewal } from './subscriptionRenewal';
+import { createPaymentIntent, createPaymentMethod, getPaymentIntentStatus } from '../paymongo';
+import { toast } from 'react-hot-toast';
+
+interface RenewalDetails {
+    subscriptionId: string;
+    amount: number;
+    billingCycle: 'monthly' | 'yearly';
+    paymentDetails?: {
+      paymentMethodId?: string;  // Store the PayMongo payment method ID
+      cardDetails?: {
+        cardNumber: string;
+        expMonth: number;
+        expYear: number;
+        cvc: string;
+      };
+    };
+  }
 
 class SubscriptionManager {
   private static instance: SubscriptionManager;
@@ -54,45 +72,65 @@ class SubscriptionManager {
 
   private async checkAndUpdateSubscriptionStatus() {
     try {
-      // Get current subscription
       const result = await store.dispatch(
         subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
           forceRefetch: true
         })
       );
-
+  
       if (result.data) {
         const subscription = result.data;
         const now = new Date();
         const endDate = new Date(subscription.endDate);
-        const warningDate = addMinutes(endDate, -24 * 60); // 24 hours before expiration
-
+        const warningDate = addDays(endDate, -3); // 3 days before expiration
+  
         // Check if subscription is expired
         if (now > endDate && subscription.status !== 'expired') {
-          // Update subscription status to expired
-          await store.dispatch(
-            subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
-              status: 'expired'
-            })
-          );
-
-          // Notify user
-          await createNotification(
-            store.dispatch,
-            'Your subscription has expired. You have been moved to the free plan.',
-            'alert'
-          );
-
-          // Apply free plan
-          await this.applyFreePlan();
+          if (subscription.autoRenew && subscription.paymentMethod === 'card') {
+            // Attempt auto-renewal
+            const renewalResult = await handleAutoRenewal({
+              subscriptionId: subscription.subscription._id,
+              amount: subscription.billingCycle === 'yearly' 
+                ? subscription.subscription.yearlyPrice 
+                : subscription.subscription.monthlyPrice,
+              billingCycle: subscription.billingCycle,
+              cardDetails: subscription.paymentDetails?.cardDetails,
+            });
+  
+            if (!renewalResult.success) {
+              // Update subscription status to expired if renewal fails
+              await store.dispatch(
+                subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+                  status: 'expired'
+                })
+              );
+              await this.applyFreePlan();
+            }
+          } else {
+            // Update subscription status to expired
+            await store.dispatch(
+              subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+                status: 'expired'
+              })
+            );
+            await this.applyFreePlan();
+          }
         }
         // Check if subscription is about to expire
         else if (now > warningDate && subscription.status === 'active') {
-          await createNotification(
-            store.dispatch,
-            'Your subscription will expire in less than 24 hours. Please renew to avoid service interruption.',
-            'alert'
-          );
+          if (subscription.autoRenew && subscription.paymentMethod === 'card') {
+            await createNotification(
+              store.dispatch,
+              'Your subscription will be automatically renewed in 3 days.',
+              'info'
+            );
+          } else {
+            await createNotification(
+              store.dispatch,
+              'Your subscription will expire in 3 days. Please renew to avoid service interruption.',
+              'alert'
+            );
+          }
         }
       }
     } catch (error) {
@@ -104,7 +142,9 @@ class SubscriptionManager {
     try {
       // Get free tier subscription
       const result = await store.dispatch(
-        subscriptionApi.endpoints.getSubscriptions.initiate()
+        subscriptionApi.endpoints.getSubscriptions.initiate(undefined, {
+          forceRefetch: true
+        })
       );
 
       const freeTier = result.data?.find(sub => sub.name === 'free');
@@ -118,6 +158,13 @@ class SubscriptionManager {
               status: 'completed'
             }
           })
+        ).unwrap();
+
+        // Force refetch current subscription
+        await store.dispatch(
+          subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
+            forceRefetch: true
+          })
         );
       }
     } catch (error) {
@@ -130,13 +177,14 @@ class SubscriptionManager {
       clearInterval(this.checkInterval);
     }
 
+    // Run initial check immediately
+    this.checkAndUpdateSubscriptionStatus();
+
+    // Set up periodic checks
     this.checkInterval = setInterval(
       () => this.checkAndUpdateSubscriptionStatus(),
       this.CHECK_INTERVAL
     );
-
-    // Run initial check
-    this.checkAndUpdateSubscriptionStatus();
   }
 
   public cleanup() {

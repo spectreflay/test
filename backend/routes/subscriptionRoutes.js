@@ -164,6 +164,30 @@ router.post('/cancel', protect, async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 });
+// Update subscription status
+router.put('/status', protect, async (req, res) => {
+  try {
+    const { status } = req.body; // Expecting { status: 'active' | 'cancelled' | 'expired' }
+
+    // Find the user's active subscription
+    const subscription = await UserSubscription.findOne({
+      user: req.user._id,
+      status: { $ne: 'cancelled' } // Exclude cancelled subscriptions
+    });
+
+    if (!subscription) {
+      return res.status(404).json({ message: 'No active subscription found' });
+    }
+
+    // Update the subscription status
+    subscription.status = status;
+    await subscription.save();
+
+    res.json({ message: 'Subscription status updated successfully', subscription });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
 
 // Change billing cycle
 router.post('/change-billing-cycle', protect, async (req, res) => {
