@@ -12,6 +12,15 @@ import {
 import PaymentModal from "../components/payment/PaymentModal";
 import BillingCycleToggle from "../components/subscription/BillingCycleToggle";
 import SubscriptionHistory from "../components/subscription/SubscriptionHistory";
+import { useSelector } from "react-redux";
+
+interface RootState {
+  auth: {
+    user?: {
+      _id: string;
+    };
+  };
+}
 
 const SubscriptionPage = () => {
   const { data: subscriptions } = useGetSubscriptionsQuery();
@@ -28,7 +37,8 @@ const SubscriptionPage = () => {
     "monthly"
   );
   const [showHistory, setShowHistory] = useState(false);
-
+  const customerId = useSelector((state: RootState) => state.auth.user?._id);
+  console.log(customerId)
   // Calculate price based on billing cycle
   const calculatePrice = (subscription: any) => {
     if (billingCycle === "yearly") {
@@ -292,6 +302,7 @@ const SubscriptionPage = () => {
             }
             onSuccess={handlePaymentSuccess}
             billingCycle={billingCycle}
+            customerId={customerId}
           />
         )}
 

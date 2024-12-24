@@ -129,6 +129,44 @@ console.log(req.body,'data')
   }
 });
 
+// Verify subscription payment
+router.post('/verify', protect, async (req, res) => {
+  try {
+    const { paymentId } = req.body;
+
+    // Find the user's active subscription
+    const subscription = await UserSubscription.findOne({
+      user: req.user._id,
+      status: 'active',
+      'paymentDetails.paymentId': paymentId
+    });
+
+    if (!subscription) {
+      return res.status(404).json({ message: 'No matching subscription found' });
+    }
+
+    // Update the subscription payment status
+    subscription.paymentDetails.status = 'verified';
+    await subscription.save();
+
+    // Update the corresponding history entry
+    await SubscriptionHistory.findOneAndUpdate(
+      {
+        user: req.user._id,
+        'paymentDetails.paymentId': paymentId
+      },
+      {
+        $set: { 'paymentDetails.status': 'verified' }
+      }
+    );
+
+    res.json({ message: 'Subscription payment verified successfully', subscription });
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
 // Cancel subscription
 router.post('/cancel', protect, async (req, res) => {
   try {

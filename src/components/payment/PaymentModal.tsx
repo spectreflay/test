@@ -13,6 +13,7 @@ interface PaymentModalProps {
   amount: number;
   billingCycle: 'monthly' | 'yearly';
   onSuccess: () => void;
+  customerId: string;
 }
 
 const PAYMENT_STEPS = ["Select Method", "Payment Details", "Confirmation"];
@@ -25,6 +26,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   amount,
   billingCycle,
   onSuccess,
+  customerId,
 }) => {
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
@@ -149,6 +151,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   amount={amount}
                   subscriptionId={subscriptionId}
                   billingCycle={billingCycle}
+                  customerId={customerId}
                   onSuccess={handlePaymentSuccess}
                   onError={handlePaymentError}
                   onBack={handleBack}

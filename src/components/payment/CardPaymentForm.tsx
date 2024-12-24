@@ -1,14 +1,15 @@
 import React, { useState } from "react";
-import { ArrowLeft, CreditCard } from "lucide-react";
+import { ArrowLeft, CreditCard } from 'lucide-react';
 import { useForm } from "react-hook-form";
 import { toast } from "react-hot-toast";
-import { createPaymentMethod, createPaymentIntent } from "../../utils/paymongo";
-import { useSubscribeMutation } from "../../store/services/subscriptionService";
+import { createPaymentMethod, createPaymentIntent, confirmPaymentIntent } from "../../utils/paymongo";
+import { useSubscribeMutation, useVerifySubscriptionMutation } from "../../store/services/subscriptionService";
 
 interface CardPaymentFormProps {
   amount: number;
   subscriptionId: string;
   billingCycle: "monthly" | "yearly";
+  customerId: string;
   onSuccess: () => void;
   onError: (error: string) => void;
   onBack: () => void;
@@ -26,17 +27,15 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
   amount,
   subscriptionId,
   billingCycle,
+  customerId,
   onSuccess,
   onBack,
   onError,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const { register, handleSubmit, formState: { errors } } = useForm<CardFormData>();
   const [subscribe] = useSubscribeMutation();
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<CardFormData>();
+  const [verifySubscription] = useVerifySubscriptionMutation();
 
   const onSubmit = async (data: CardFormData) => {
     console.log("Form submitted with data:", data);
@@ -44,7 +43,7 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
       setIsProcessing(true);
 
       // Create payment method
-      const paymentMethod = await createPaymentMethod({
+      const paymentMethodData: any = {
         type: "card",
         details: {
           card_number: data.cardNumber.replace(/\s/g, ""),
@@ -54,62 +53,75 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
         },
         billing: {
           name: data.cardHolder,
-          email: "customer@example.com", // You might want to make this dynamic
-        },
-      });
+          email: "customer@example.com", // You might want to add an email field to your form
+          phone: "09123456789" // You might want to add a phone field to your form
+        }
+      };
+
+      const paymentMethod = await createPaymentMethod(paymentMethodData);
 
       console.log("Payment method created:", paymentMethod);
 
       // Create payment intent
-      const paymentIntent = await createPaymentIntent({
+      const paymentIntentData: any = {
         amount,
         paymentMethodAllowed: ["card"],
-        paymentMethodId: paymentMethod.id,
         description: "Subscription Payment",
         currency: "PHP",
-      });
-
-      const paymentDetails = {
-        paymentId: paymentIntent.id,
-        amount,
-        status: "completed",
-        cardDetails: {
-          cardNumber: data.cardNumber.slice(-4),
-          expMonth: parseInt(data.expMonth),
-          expYear: parseInt(data.expYear),
-          cardHolder: data.cardHolder,
+        customerId,
+        metadata: {
+          subscriptionId,
+          billingCycle,
         },
-        paymentMethodId: paymentMethod.id, // Save the payment method ID
       };
+
+      const paymentIntent = await createPaymentIntent(paymentIntentData);
 
       console.log("Payment intent created:", paymentIntent);
 
-      // Store card details for auto-renewal (excluding CVC)
-      const cardDetails = {
-        cardNumber: data.cardNumber.slice(-4), // Only store last 4 digits
-        expMonth: parseInt(data.expMonth),
-        expYear: parseInt(data.expYear),
-        cardHolder: data.cardHolder,
-      };
+      // Confirm the payment intent with the payment method
+      const confirmedIntent = await confirmPaymentIntent(paymentIntent.id, paymentMethod.id);
 
-      console.log("Card details to be stored:", cardDetails);
+      console.log("Payment intent confirmed:", confirmedIntent);
 
-      // Update subscription with payment and card details
-      const subscriptionResult = await subscribe({
-        subscriptionId,
-        paymentMethod: "card",
-        billingCycle,
-        autoRenew: true, // Enable auto-renewal by default for card payments
-        paymentDetails: paymentDetails,
-      }).unwrap();
+      if (confirmedIntent.attributes.status === 'succeeded') {
+        const paymentDetails = {
+          paymentId: confirmedIntent.id,
+          amount,
+          status: "completed",
+          paymentMethodId: paymentMethod.id,
+        };
 
-      console.log("Subscription updated:", subscriptionResult);
+        // Update subscription with payment and card details
+        const subscriptionResult = await subscribe({
+          subscriptionId,
+          paymentMethod: "card",
+          billingCycle,
+          autoRenew: true,
+          paymentDetails: paymentDetails,
+        }).unwrap();
 
-      toast.success("Payment successful!");
-      onSuccess();
+        console.log("Subscription updated:", subscriptionResult);
+
+        // Verify the subscription payment
+        await verifySubscription({ paymentId: confirmedIntent.id }).unwrap();
+
+        toast.success("Payment successful!");
+        onSuccess();
+      } else if (confirmedIntent.attributes.status === 'awaiting_next_action') {
+        // Handle 3D Secure authentication if required
+        window.location.href = confirmedIntent.attributes.next_action.redirect.url;
+      } else {
+        throw new Error(`Unexpected payment intent status: ${confirmedIntent.attributes.status}`);
+      }
     } catch (error: any) {
       console.error("Payment error:", error);
-      onError(error.message || "Payment failed");
+      if (error.response && error.response.data && error.response.data.errors) {
+        const paymongoError = error.response.data.errors[0];
+        onError(paymongoError.detail || "Payment failed");
+      } else {
+        onError(error.message || "Payment failed");
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -127,8 +139,6 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
         </button>
         <h2 className="text-xl font-semibold">Card Payment</h2>
       </div>
-
-      <div className="text-2xl font-bold mb-6">${amount.toFixed(2)}</div>
 
       <div className="space-y-4">
         <div>
@@ -259,3 +269,4 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
 };
 
 export default CardPaymentForm;
+
