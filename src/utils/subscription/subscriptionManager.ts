@@ -30,13 +30,16 @@ class SubscriptionManager {
       stores: isExpired ? 1 : subscription.subscription.maxStores
     };
     const isNearExpiration = this.isNearExpiration(subscription);
+    const hasAdvanceRenewal = !!subscription.nextSubscription;
     return {
       isExpired,
       isNearExpiration,
       features,
       limits,
       tier: isExpired ? 'none' : subscription.subscription.name,
-      expiryDate: subscription.endDate || null
+      expiryDate: subscription.endDate || null,
+      hasAdvanceRenewal,
+      nextSubscription: subscription.nextSubscription
     };
   }
 
@@ -68,20 +71,39 @@ class SubscriptionManager {
         const warningDate = addDays(endDate, -3); // 3 days before expiration
   
         // Check if subscription is expired
-        if (now > endDate && subscription.status !== 'expired') {
-          if (subscription.autoRenew && subscription.paymentMethod === 'card') {
-            // Attempt auto-renewal
-            const renewalResult = await handleAutoRenewal({
-              subscriptionId: subscription.subscription._id,
-              amount: subscription.billingCycle === 'yearly' 
-                ? subscription.subscription.yearlyPrice 
-                : subscription.subscription.monthlyPrice,
-              billingCycle: subscription.billingCycle,
-              cardDetails: subscription.paymentDetails?.cardDetails,
-            });
+        if (now > endDate) {
+          if (subscription.nextSubscription) {
+            // Activate the advance renewal subscription
+            await store.dispatch(
+              subscriptionApi.endpoints.activateAdvanceRenewal.initiate()
+            ).unwrap();
+
+            await createNotification(
+              store.dispatch,
+              'Your advance renewal subscription has been activated.',
+              'system'
+            );
+          } else if (subscription.status !== 'expired') {
+            if (subscription.autoRenew && subscription.paymentMethod === 'card') {
+              // Attempt auto-renewal
+              const renewalResult = await handleAutoRenewal({
+                subscriptionId: subscription.subscription._id,
+                amount: subscription.billingCycle === 'yearly' 
+                  ? subscription.subscription.yearlyPrice 
+                  : subscription.subscription.monthlyPrice,
+                billingCycle: subscription.billingCycle,
+                cardDetails: subscription.paymentDetails?.cardDetails,
+              });
   
-            if (!renewalResult.success) {
-              // Update subscription status to expired if renewal fails
+              if (!renewalResult.success) {
+                await store.dispatch(
+                  subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+                    status: 'expired'
+                  })
+                );
+                await this.applyFreePlan();
+              }
+            } else {
               await store.dispatch(
                 subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
                   status: 'expired'
@@ -89,19 +111,17 @@ class SubscriptionManager {
               );
               await this.applyFreePlan();
             }
-          } else {
-            // Update subscription status to expired
-            await store.dispatch(
-              subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
-                status: 'expired'
-              })
-            );
-            await this.applyFreePlan();
           }
         }
         // Check if subscription is about to expire
         else if (now > warningDate && subscription.status === 'active') {
-          if (subscription.autoRenew && subscription.paymentMethod === 'card') {
+          if (subscription.nextSubscription) {
+            await createNotification(
+              store.dispatch,
+              'Your subscription will expire soon. Your advance renewal subscription will be activated automatically.',
+              'info'
+            );
+          } else if (subscription.autoRenew && subscription.paymentMethod === 'card') {
             await createNotification(
               store.dispatch,
               'Your subscription will be automatically renewed in 3 days.',

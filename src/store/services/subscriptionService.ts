@@ -1,4 +1,5 @@
 import { api } from "../api";
+import { createNotification } from "../../utils/notification";
 
 export interface CardDetails {
   cardNumber: string;
@@ -39,6 +40,13 @@ export interface UserSubscription {
   billingCycle: "monthly" | "yearly";
   paymentMethod: string;
   paymentDetails?: PaymentDetails;
+  nextSubscription?: {
+    subscription: Subscription;
+    billingCycle: "monthly" | "yearly";
+    startDate: string;
+    endDate: string;
+    paymentDetails: PaymentDetails;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -181,6 +189,65 @@ export const subscriptionApi = api.injectEndpoints({
       }),
       invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
     }),
+    advanceRenewal: builder.mutation<
+      UserSubscription,
+      {
+        subscriptionId: string;
+        billingCycle: "monthly" | "yearly";
+        paymentDetails: PaymentDetails;
+      }
+    >({
+      query: (data) => ({
+        url: "subscriptions/advance-renewal",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
+    }),
+
+    activateAdvanceRenewal: builder.mutation<UserSubscription, void>({
+      query: () => ({
+        url: "subscriptions/activate-advance-renewal",
+        method: "POST",
+      }),
+      invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data: subscription } = await queryFulfilled;
+          await createNotification(
+            dispatch,
+            'Your advance renewal subscription has been activated successfully.',
+            'system'
+          );
+          
+          // Force refetch current subscription and history
+          await Promise.all([
+            dispatch(
+              subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
+                forceRefetch: true,
+                subscribe: false,
+              })
+            ),
+            dispatch(
+              subscriptionApi.endpoints.getSubscriptionHistory.initiate(undefined, {
+                forceRefetch: true,
+                subscribe: false,
+              })
+            ),
+          ]);
+        } catch (error) {
+          console.error('Error activating advance renewal:', error);
+        }
+      },
+    }),
+
+    cancelAdvanceRenewal: builder.mutation<void, void>({
+      query: () => ({
+        url: "subscriptions/cancel-advance-renewal",
+        method: "POST",
+      }),
+      invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
+    }),
   }),
 });
 
@@ -193,4 +260,7 @@ export const {
   useCancelSubscriptionMutation,
   useChangeBillingCycleMutation,
   useUpdateSubscriptionStatusMutation,
+  useAdvanceRenewalMutation,
+  useActivateAdvanceRenewalMutation,
+  useCancelAdvanceRenewalMutation,
 } = subscriptionApi;
