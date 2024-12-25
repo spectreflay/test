@@ -2,10 +2,8 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
-import SubscriptionAlert from "./SubscriptionAlert";
 import { useSidebarStore } from "../store/ui/sidebarStore";
 import SubscriptionExpirationAlert from './subscription/SubscriptionExpirationAlert';
-import SubscriptionExpiredBanner from './subscription/SubscriptionExpiredBanner';
 import { useGetCurrentSubscriptionQuery } from '../store/services/subscriptionService';
 
 const Layout = () => {
@@ -20,8 +18,6 @@ const Layout = () => {
         }`}
       >
         <Header />
-        <SubscriptionAlert />
-        <SubscriptionExpiredBanner />
         {subscription && (
         <SubscriptionExpirationAlert subscription={subscription} />
       )}
