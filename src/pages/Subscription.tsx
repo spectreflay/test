@@ -12,7 +12,6 @@ import {
 import PaymentModal from "../components/payment/PaymentModal";
 import BillingCycleToggle from "../components/subscription/BillingCycleToggle";
 import SubscriptionHistory from "../components/subscription/SubscriptionHistory";
-import AdvanceRenewalButton from "../components/subscription/AdvanceRenewalButton";
 import { subscriptionManager } from "../utils/subscription/subscriptionManager";
 
 const SubscriptionPage = () => {
@@ -30,8 +29,6 @@ const SubscriptionPage = () => {
     "monthly"
   );
   const [showHistory, setShowHistory] = useState(false);
-  const subscriptionDetails =
-    subscriptionManager.getSubscriptionDetails(currentSubscription);
 
   // Calculate price based on billing cycle
   const calculatePrice = (subscription: any) => {
@@ -172,14 +169,6 @@ const SubscriptionPage = () => {
           </div>
 
           <BillingCycleToggle cycle={billingCycle} onChange={setBillingCycle} />
-          <AdvanceRenewalButton
-            subscription={currentSubscription?.subscription}
-            hasAdvanceRenewal={subscriptionDetails.hasAdvanceRenewal}
-            onSuccess={() => {
-              // Refresh subscription data
-              refetchCurrentSubscription();
-            }}
-          />
 
           <div className="mt-12 space-y-4 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-3 sm:gap-6 lg:max-w-4xl lg:mx-auto xl:max-w-none xl:mx-0">
             {subscriptions?.map((subscription) => {
