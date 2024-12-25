@@ -233,4 +233,82 @@ router.post('/change-billing-cycle', protect, async (req, res) => {
   }
 });
 
+// Create advance subscription
+router.post('/advance-subscribe', protect, async (req, res) => {
+  try {
+    const { subscriptionId, paymentMethod, billingCycle, paymentDetails } = req.body;
+
+    // Calculate start and end dates based on current subscription
+    const currentSubscription = await UserSubscription.findOne({
+      user: req.user._id,
+      status: 'active'
+    });
+
+    if (!currentSubscription) {
+      return res.status(400).json({ message: 'No active subscription found' });
+    }
+
+    const startDate = new Date(currentSubscription.endDate);
+    const endDate = new Date(startDate);
+    
+    if (billingCycle === 'yearly') {
+      endDate.setFullYear(endDate.getFullYear() + 1);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
+
+    // Create pending subscription
+    const pendingSubscription = await PendingSubscription.create({
+      user: req.user._id,
+      subscription: subscriptionId,
+      startDate,
+      endDate,
+      billingCycle,
+      paymentMethod,
+      paymentDetails,
+      status: 'pending'
+    });
+
+    res.status(201).json(pendingSubscription);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Get pending subscriptions
+router.get('/pending', protect, async (req, res) => {
+  try {
+    const pendingSubscriptions = await PendingSubscription.find({
+      user: req.user._id,
+      status: 'pending'
+    }).populate('subscription');
+    
+    res.json(pendingSubscriptions);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Cancel pending subscription
+router.post('/pending/:id/cancel', protect, async (req, res) => {
+  try {
+    const pendingSubscription = await PendingSubscription.findOne({
+      _id: req.params.id,
+      user: req.user._id,
+      status: 'pending'
+    });
+
+    if (!pendingSubscription) {
+      return res.status(404).json({ message: 'Pending subscription not found' });
+    }
+
+    pendingSubscription.status = 'cancelled';
+    await pendingSubscription.save();
+
+    res.json({ message: 'Pending subscription cancelled successfully' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 export default router;

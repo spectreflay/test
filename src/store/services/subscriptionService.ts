@@ -88,6 +88,20 @@ export interface SubscribeRequest {
   };
 }
 
+export interface PendingSubscription {
+  _id: string;
+  user: string;
+  subscription: Subscription;
+  startDate: string;
+  endDate: string;
+  billingCycle: 'monthly' | 'yearly';
+  paymentMethod: string;
+  paymentDetails: PaymentDetails;
+  status: 'pending' | 'active' | 'cancelled';
+  createdAt: string;
+}
+
+
 export const subscriptionApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getSubscriptions: builder.query<Subscription[], void>({
@@ -248,6 +262,27 @@ export const subscriptionApi = api.injectEndpoints({
       }),
       invalidatesTags: ["CurrentSubscription", "SubscriptionHistory"],
     }),
+    advanceSubscribe: builder.mutation<PendingSubscription, SubscribeRequest>({
+      query: (data) => ({
+        url: 'subscriptions/advance-subscribe',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['PendingSubscriptions'],
+    }),
+    
+    getPendingSubscriptions: builder.query<PendingSubscription[], void>({
+      query: () => 'subscriptions/pending',
+      providesTags: ['PendingSubscriptions'],
+    }),
+    
+    cancelPendingSubscription: builder.mutation<void, string>({
+      query: (id) => ({
+        url: `subscriptions/pending/${id}/cancel`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['PendingSubscriptions'],
+    }),
   }),
 });
 
@@ -263,4 +298,7 @@ export const {
   useAdvanceRenewalMutation,
   useActivateAdvanceRenewalMutation,
   useCancelAdvanceRenewalMutation,
+  useAdvanceSubscribeMutation,
+  useGetPendingSubscriptionsQuery,
+  useCancelPendingSubscriptionMutation,
 } = subscriptionApi;
