@@ -43,41 +43,66 @@ router.get('/history', protect, async (req, res) => {
   }
 });
 
-// Subscribe or upgrade/downgrade
+// Subscribe or upgrade/downgrade with advance renewal support
 router.post('/subscribe', protect, async (req, res) => {
   try {
-    const { subscriptionId, paymentMethod, paymentDetails, billingCycle = 'monthly' } = req.body;
-console.log(req.body,'data')
+    const { subscriptionId, paymentMethod, paymentDetails, billingCycle = 'monthly', isAdvanceRenewal = false } = req.body;
+
     // Get current subscription if exists
     const currentSubscription = await UserSubscription.findOne({
       user: req.user._id,
       status: 'active'
     });
 
-    // Calculate proration if upgrading/downgrading
-    let prorationCredit = 0;
-    if (currentSubscription) {
-      const daysLeft = Math.ceil((new Date(currentSubscription.endDate) - new Date()) / (1000 * 60 * 60 * 24));
-      const dailyRate = currentSubscription.subscription.price / 30;
-      prorationCredit = daysLeft * dailyRate;
-    }
-
-    // Calculate end date based on billing cycle
-    const startDate = new Date();
-    const endDate = new Date();
+    // Calculate start and end dates
+    const startDate = isAdvanceRenewal && currentSubscription 
+      ? new Date(currentSubscription.endDate)
+      : new Date();
+    
+    const endDate = new Date(startDate);
     if (billingCycle === 'yearly') {
       endDate.setFullYear(endDate.getFullYear() + 1);
     } else {
       endDate.setMonth(endDate.getMonth() + 1);
     }
 
-    // Cancel current subscription
+    // If this is an advance renewal and there's an active subscription
+    if (isAdvanceRenewal && currentSubscription) {
+      // Update current subscription with pending renewal
+      currentSubscription.pendingRenewal = {
+        subscription: subscriptionId,
+        startDate,
+        endDate,
+        billingCycle,
+        paymentMethod,
+        paymentDetails
+      };
+      await currentSubscription.save();
+
+      // Record in history
+      await SubscriptionHistory.create({
+        user: req.user._id,
+        subscription: subscriptionId,
+        action: 'subscribed',
+        reason: 'advance_renewal',
+        billingCycle,
+        startDate,
+        endDate,
+        autoRenew: true,
+        paymentMethod,
+        paymentDetails
+      });
+
+      res.status(201).json(currentSubscription);
+      return;
+    }
+
+    // For immediate subscription changes
     if (currentSubscription) {
       currentSubscription.status = 'cancelled';
       currentSubscription.autoRenew = false;
       await currentSubscription.save();
 
-      // Record cancellation in history
       await SubscriptionHistory.create({
         user: req.user._id,
         subscription: currentSubscription.subscription,
@@ -100,7 +125,6 @@ console.log(req.body,'data')
       startDate,
       endDate,
       billingCycle,
-      prorationCredit,
       paymentMethod,
       paymentDetails,
       autoRenew: true
@@ -143,9 +167,9 @@ router.post('/cancel', protect, async (req, res) => {
 
     subscription.status = 'cancelled';
     subscription.autoRenew = false;
+    subscription.pendingRenewal = null; // Clear any pending renewals
     await subscription.save();
 
-    // Record cancellation in history
     await SubscriptionHistory.create({
       user: req.user._id,
       subscription: subscription.subscription,
@@ -160,6 +184,59 @@ router.post('/cancel', protect, async (req, res) => {
     });
 
     res.json({ message: 'Subscription cancelled successfully' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Get pending renewal details
+router.get('/pending-renewal', protect, async (req, res) => {
+  try {
+    const subscription = await UserSubscription.findOne({
+      user: req.user._id,
+      status: 'active',
+      pendingRenewal: { $exists: true, $ne: null }
+    }).populate('pendingRenewal.subscription');
+
+    if (!subscription || !subscription.pendingRenewal) {
+      return res.status(404).json({ message: 'No pending renewal found' });
+    }
+
+    res.json(subscription.pendingRenewal);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Cancel pending renewal
+router.post('/cancel-pending-renewal', protect, async (req, res) => {
+  try {
+    const subscription = await UserSubscription.findOne({
+      user: req.user._id,
+      status: 'active'
+    });
+
+    if (!subscription || !subscription.pendingRenewal) {
+      return res.status(404).json({ message: 'No pending renewal found' });
+    }
+
+    subscription.pendingRenewal = null;
+    await subscription.save();
+
+    await SubscriptionHistory.create({
+      user: req.user._id,
+      subscription: subscription.subscription,
+      action: 'cancelled',
+      reason: 'pending_renewal_cancelled',
+      billingCycle: subscription.billingCycle,
+      startDate: subscription.startDate,
+      endDate: subscription.endDate,
+      autoRenew: subscription.autoRenew,
+      paymentMethod: subscription.paymentMethod,
+      paymentDetails: subscription.paymentDetails
+    });
+
+    res.json({ message: 'Pending renewal cancelled successfully' });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
