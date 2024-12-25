@@ -21,22 +21,41 @@ class SubscriptionManager {
     return SubscriptionManager.instance;
   }
 
-  public getSubscriptionDetails(subscription: UserSubscription) {
+  public getSubscriptionDetails(subscription: UserSubscription | undefined) {
+    if (!subscription) {
+      // Handle the case where subscription is undefined
+      return {
+        isExpired: true,
+        isNearExpiration: false,
+        features: [],
+        limits: {
+          products: 0,
+          staff: 0,
+          stores: 0
+        },
+        tier: 'none',
+        expiryDate: null,
+        hasAdvanceRenewal: false,
+        nextSubscription: null
+      };
+    }
+  
     const isExpired = this.isExpired(subscription);
-    const features = subscription.subscription.features;
+    const features = subscription.subscription.features || [];
     const limits = {
-      products: isExpired ? 10 : subscription.subscription.maxProducts,
-      staff: isExpired ? 2 : subscription.subscription.maxStaff,
-      stores: isExpired ? 1 : subscription.subscription.maxStores
+      products: isExpired ? 10 : subscription.subscription.maxProducts || 0,
+      staff: isExpired ? 2 : subscription.subscription.maxStaff || 0,
+      stores: isExpired ? 1 : subscription.subscription.maxStores || 0
     };
     const isNearExpiration = this.isNearExpiration(subscription);
     const hasAdvanceRenewal = !!subscription.nextSubscription;
+  
     return {
       isExpired,
       isNearExpiration,
       features,
       limits,
-      tier: isExpired ? 'none' : subscription.subscription.name,
+      tier: isExpired ? 'none' : subscription.subscription.name || 'unknown',
       expiryDate: subscription.endDate || null,
       hasAdvanceRenewal,
       nextSubscription: subscription.nextSubscription
