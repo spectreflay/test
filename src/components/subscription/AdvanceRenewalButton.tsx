@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useAdvanceRenewalMutation, useCancelAdvanceRenewalMutation } from '../../store/services/subscriptionService';
+import { useAdvanceSubscribeMutation, useCancelAdvanceRenewalMutation } from '../../store/services/subscriptionService';
 import PaymentModal from '../payment/PaymentModal';
 
 interface AdvanceRenewalButtonProps {
@@ -16,7 +16,7 @@ const AdvanceRenewalButton: React.FC<AdvanceRenewalButtonProps> = ({
   onSuccess
 }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [advanceRenewal] = useAdvanceRenewalMutation();
+  const [advanceSubscribe] = useAdvanceSubscribeMutation();
   const [cancelAdvanceRenewal] = useCancelAdvanceRenewalMutation();
 
   const handleAdvanceRenewal = async (
@@ -25,10 +25,16 @@ const AdvanceRenewalButton: React.FC<AdvanceRenewalButtonProps> = ({
     paymentDetails: any
   ) => {
     try {
-      await advanceRenewal({
+      await advanceSubscribe({
         subscriptionId,
         billingCycle,
-        paymentDetails,
+        paymentMethod: paymentDetails.paymentMethod,
+        paymentDetails: {
+          paymentId: paymentDetails.paymentId,
+          amount: paymentDetails.amount,
+          status: paymentDetails.status,
+          cardDetails: paymentDetails.cardDetails
+        }
       }).unwrap();
       
       toast.success('Advance renewal scheduled successfully');
