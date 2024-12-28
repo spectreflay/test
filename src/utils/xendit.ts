@@ -207,6 +207,20 @@ export const createSubscriptionPlan = async (
       description: `${name} subscription plan`,
       success_return_url: `${window.location.origin}/subscription?status=success`,
       failure_return_url: `${window.location.origin}/subscription?status=failed`,
+      rewrite_return_url: true,
+      payment_methods: ['CREDIT_CARD', 'GCASH', 'GRABPAY', 'PAYMAYA'],
+      recurring_action: 'PAYMENT',
+      charge_immediately: true,
+      notification_config: {
+        webhook_url: `${window.location.origin}/api/webhooks/xendit`,
+        invoice_created: true,
+        invoice_paid: true,
+        subscription_activated: true,
+        subscription_cancelled: true,
+        subscription_completed: true,
+        subscription_expired: true,
+        subscription_failed: true
+      }
     });
     return response.data;
   } catch (error) {
@@ -236,6 +250,12 @@ export const createSubscription = async (
       currency: 'PHP',
       success_return_url: `${window.location.origin}/subscription?status=success`,
       failure_return_url: `${window.location.origin}/subscription?status=failed`,
+      rewrite_return_url: true,
+      notification_config: {
+        webhook_url: `${window.location.origin}/api/webhooks/xendit`,
+        payment_success: true,
+        payment_failure: true
+      }
     });
     return response.data;
   } catch (error) {
