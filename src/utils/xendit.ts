@@ -12,24 +12,12 @@ const xenditAxios = axios.create({
   },
 });
 
-interface CardTokenRequest {
-  card_number: string;
-  exp_month: number;
-  exp_year: number;
-  cvc: string;
-}
-
-interface EWalletChargeRequest {
-  reference_id: string;
-  currency: string;
-  amount: number;
-  checkout_method: string;
-  channel_code: string;
-  channel_properties: {
-    success_redirect_url: string;
-    failure_redirect_url: string;
-  };
-}
+// Error handling utility
+const handleXenditError = (error: any) => {
+  const errorMessage = error.response?.data?.message || error.message;
+  console.error('Xendit API Error:', error.response?.data || error);
+  throw new Error(errorMessage || 'Payment processing failed');
+};
 
 // Create invoice for e-wallet payments
 export const createInvoice = async (amount: number, description: string) => {
@@ -45,34 +33,43 @@ export const createInvoice = async (amount: number, description: string) => {
       invoice_duration: 86400, // 24 hours
       should_send_email: true,
       reminder_time: 1, // Send reminder after 1 hour
+      items: [{
+        name: description,
+        quantity: 1,
+        price: amount,
+        category: 'Subscription',
+      }],
+      customer: IS_DEVELOPMENT ? {
+        email: 'test@example.com',
+        given_names: 'Test',
+        surname: 'User'
+      } : undefined
     });
     return response.data;
-  } catch (error: any) {
-    console.error('Error creating invoice:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Failed to create invoice');
+  } catch (error) {
+    handleXenditError(error);
   }
 };
 
 // Create card token for credit card payments
-export const createCardToken = async (cardData: CardTokenRequest) => {
+export const createCardToken = async (cardData: {
+  card_number: string;
+  exp_month: number;
+  exp_year: number;
+  cvc: string;
+}) => {
   try {
-    // Basic card validation
-    if (!validateCard(cardData)) {
-      throw new Error('Invalid card details');
-    }
-
     const response = await xenditAxios.post('/v2/credit_card_tokens', {
       card_number: cardData.card_number.replace(/\s/g, ''),
       card_exp_month: cardData.exp_month,
       card_exp_year: cardData.exp_year,
       card_cvn: cardData.cvc,
-      is_multiple_use: false,
+      is_multiple_use: true, // Enable for subscription renewals
       should_authenticate: true,
     });
     return response.data;
-  } catch (error: any) {
-    console.error('Error creating card token:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Failed to process card');
+  } catch (error) {
+    handleXenditError(error);
   }
 };
 
@@ -87,11 +84,74 @@ export const createCardCharge = async (tokenId: string, amount: number, descript
       description,
       capture: true,
       authentication_id: tokenId,
+      recurring: true // Enable for subscription charges
     });
     return response.data;
-  } catch (error: any) {
-    console.error('Error charging card:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Failed to charge card');
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Create recurring payment
+export const createRecurringPayment = async (
+  tokenId: string, 
+  amount: number, 
+  interval: 'month' | 'year',
+  description: string
+) => {
+  try {
+    const response = await xenditAxios.post('/recurring_payments', {
+      external_id: `recurring-${Date.now()}`,
+      token_id: tokenId,
+      amount,
+      currency: 'PHP',
+      interval,
+      description,
+      failure_redirect_url: `${window.location.origin}/subscription?status=failed`,
+      success_redirect_url: `${window.location.origin}/subscription?status=success`,
+      schedule: {
+        interval_count: 1,
+        start_date: new Date().toISOString(),
+        timezone: 'Asia/Manila'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Get payment status
+export const getPaymentStatus = async (paymentId: string) => {
+  try {
+    const response = await xenditAxios.get(`/credit_card_charges/${paymentId}`);
+    return {
+      status: response.data.status,
+      failureReason: response.data.failure_reason,
+      lastAttemptStatus: response.data.last_attempt_status
+    };
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Stop recurring payment
+export const stopRecurringPayment = async (recurringPaymentId: string) => {
+  try {
+    const response = await xenditAxios.post(`/recurring_payments/${recurringPaymentId}/stop`);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Retry failed payment
+export const retryFailedPayment = async (paymentId: string) => {
+  try {
+    const response = await xenditAxios.post(`/credit_card_charges/${paymentId}/retry`);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
   }
 };
 
@@ -100,16 +160,19 @@ export const getInvoiceStatus = async (invoiceId: string) => {
   try {
     const response = await xenditAxios.get(`/v2/invoices/${invoiceId}`);
     return response.data;
-  } catch (error: any) {
-    console.error('Error getting invoice status:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Failed to get invoice status');
+  } catch (error) {
+    handleXenditError(error);
   }
 };
 
 // Create e-wallet charge
-export const createEWalletCharge = async (type: 'GCASH' | 'GRABPAY' | 'PAYMAYA', amount: number, description: string) => {
+export const createEWalletCharge = async (
+  type: 'GCASH' | 'GRABPAY' | 'PAYMAYA', 
+  amount: number, 
+  description: string
+) => {
   try {
-    const request: EWalletChargeRequest = {
+    const response = await xenditAxios.post('/ewallets/charges', {
       reference_id: `ewallet-${Date.now()}`,
       currency: 'PHP',
       amount,
@@ -119,60 +182,12 @@ export const createEWalletCharge = async (type: 'GCASH' | 'GRABPAY' | 'PAYMAYA',
         success_redirect_url: `${window.location.origin}/subscription?status=success`,
         failure_redirect_url: `${window.location.origin}/subscription?status=failed`,
       },
-    };
-
-    const response = await xenditAxios.post('/ewallets/charges', request);
-    return response.data;
-  } catch (error: any) {
-    console.error('Error creating e-wallet charge:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Failed to create e-wallet charge');
-  }
-};
-
-// Card validation helper functions
-const validateCard = (cardData: CardTokenRequest): boolean => {
-  // Validate card number (Luhn algorithm)
-  const isValidCardNumber = (number: string): boolean => {
-    const digits = number.replace(/\D/g, '');
-    let sum = 0;
-    let isEven = false;
-    
-    for (let i = digits.length - 1; i >= 0; i--) {
-      let digit = parseInt(digits[i]);
-      
-      if (isEven) {
-        digit *= 2;
-        if (digit > 9) {
-          digit -= 9;
-        }
+      metadata: {
+        description
       }
-      
-      sum += digit;
-      isEven = !isEven;
-    }
-    
-    return sum % 10 === 0;
-  };
-
-  // Validate expiry date
-  const isValidExpiry = (month: number, year: number): boolean => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-
-    if (year < currentYear) return false;
-    if (year === currentYear && month < currentMonth) return false;
-    return true;
-  };
-
-  // Validate CVV (3-4 digits)
-  const isValidCVV = (cvv: string): boolean => {
-    return /^[0-9]{3,4}$/.test(cvv);
-  };
-
-  return (
-    isValidCardNumber(cardData.card_number) &&
-    isValidExpiry(cardData.exp_month, cardData.exp_year) &&
-    isValidCVV(cardData.cvc)
-  );
+    });
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
 };

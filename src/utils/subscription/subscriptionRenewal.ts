@@ -1,5 +1,10 @@
 import { addDays } from 'date-fns';
-import { createPaymentIntent, createPaymentMethod } from '../paymongo';
+import { 
+  createCardToken, 
+  createRecurringPayment, 
+  stopRecurringPayment,
+  retryFailedPayment 
+} from '../xendit';
 import { store } from '../../store';
 import { subscriptionApi } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
@@ -20,14 +25,13 @@ interface RenewalDetails {
 
 export const handleAutoRenewal = async (details: RenewalDetails) => {
   try {
-    // Check if we have card details in the subscription's paymentDetails
+    // Get current subscription
     const { data: currentSubscription } = await store.dispatch(
       subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
         forceRefetch: true
       })
     );
 
-    // If no card details are stored, we can't auto-renew
     if (!currentSubscription?.paymentDetails?.cardDetails) {
       await createNotification(
         store.dispatch,
@@ -41,34 +45,25 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
       };
     }
 
-    // Use stored card details for renewal
     const cardDetails = currentSubscription.paymentDetails.cardDetails;
 
-    // Create payment method
-    const paymentMethod = await createPaymentMethod({
-      type: 'card',
-      details: {
-        card_number: cardDetails.cardNumber,
-        exp_month: cardDetails.expMonth,
-        exp_year: cardDetails.expYear,
-        cvc: cardDetails.cvc,
-      },
-      billing: {
-        name: cardDetails.cardHolder,
-        email: currentSubscription.user.email, // Use the user's email from subscription
-      },
+    // Create new card token
+    const cardToken = await createCardToken({
+      card_number: cardDetails.cardNumber,
+      exp_month: cardDetails.expMonth,
+      exp_year: cardDetails.expYear,
+      cvc: cardDetails.cvc || '', // CVC might not be available for renewals
     });
 
-    // Create payment intent
-    const paymentIntent = await createPaymentIntent({
-      amount: details.amount,
-      paymentMethodAllowed: ['card'],
-      paymentMethodId: paymentMethod.id,
-      description: 'Subscription Auto Renewal',
-      currency: 'PHP',
-    });
+    // Create recurring payment
+    const recurringPayment = await createRecurringPayment(
+      cardToken.id,
+      details.amount,
+      details.billingCycle === 'yearly' ? 'year' : 'month',
+      `Subscription Auto-Renewal - ${details.subscriptionId}`
+    );
 
-    if (paymentIntent.attributes.status === 'succeeded') {
+    if (recurringPayment.status === 'active') {
       // Calculate new subscription dates
       const startDate = new Date();
       const endDate = details.billingCycle === 'yearly' 
@@ -83,15 +78,15 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
           billingCycle: details.billingCycle,
           autoRenew: true,
           paymentDetails: {
-            paymentId: paymentIntent.id,
+            paymentId: recurringPayment.id,
             amount: details.amount,
             status: 'completed',
-            cardDetails: cardDetails, // Store card details for future renewals
+            cardDetails,
+            recurringPaymentId: recurringPayment.id
           },
         })
       ).unwrap();
 
-      // Notify user
       await createNotification(
         store.dispatch,
         'Your subscription has been automatically renewed.',
@@ -102,16 +97,15 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
 
       return {
         success: true,
-        paymentId: paymentIntent.id,
+        paymentId: recurringPayment.id,
         status: 'completed',
       };
     } else {
-      throw new Error('Payment failed');
+      throw new Error('Recurring payment setup failed');
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auto-renewal failed:', error);
     
-    // Notify user of failed renewal
     await createNotification(
       store.dispatch,
       'Automatic subscription renewal failed. Please update your payment method or renew manually.',
@@ -123,28 +117,47 @@ export const handleAutoRenewal = async (details: RenewalDetails) => {
     return {
       success: false,
       status: 'failed',
-      message: 'Failed to process auto-renewal',
+      message: error.message || 'Failed to process auto-renewal',
     };
   }
 };
 
-export const scheduleAutoRenewal = (details: RenewalDetails, daysBeforeExpiry: number = 3) => {
-  const now = new Date();
-  const renewalDate = new Date();
-  renewalDate.setDate(renewalDate.getDate() + (details.billingCycle === 'yearly' ? 362 : 27)); // 3 days before expiry
+export const retryFailedRenewal = async (paymentId: string, details: RenewalDetails) => {
+  try {
+    const retryResult = await retryFailedPayment(paymentId);
+    
+    if (retryResult.status === 'succeeded') {
+      await handleAutoRenewal(details);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Failed to retry renewal:', error);
+    return false;
+  }
+};
 
-  const timeUntilRenewal = renewalDate.getTime() - now.getTime();
-  
-  if (timeUntilRenewal > 0) {
-    setTimeout(async () => {
-      const result = await handleAutoRenewal(details);
-      
-      if (!result.success) {
-        // Retry once after 24 hours if failed
-        setTimeout(async () => {
-          await handleAutoRenewal(details);
-        }, 24 * 60 * 60 * 1000);
-      }
-    }, timeUntilRenewal);
+export const cancelSubscriptionRenewal = async (recurringPaymentId: string) => {
+  try {
+    await stopRecurringPayment(recurringPaymentId);
+    
+    // Update subscription autoRenew status
+    await store.dispatch(
+      subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+        status: 'active',
+        autoRenew: false
+      })
+    );
+
+    await createNotification(
+      store.dispatch,
+      'Auto-renewal has been cancelled for your subscription.',
+      'system'
+    );
+
+    return true;
+  } catch (error) {
+    console.error('Failed to cancel renewal:', error);
+    return false;
   }
 };
