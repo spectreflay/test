@@ -1,8 +1,5 @@
-import axios from 'axios';
 import { api } from "../api";
-
-const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || "sk_test_qprGQz76AaFHqQbvhMm5wvCq";
-const PAYMONGO_API_URL = 'https://api.paymongo.com/v1';
+import { createInvoice, createCardToken, createCardCharge, getInvoiceStatus, createEWalletCharge } from '../../utils/xendit';
 
 interface CardDetails {
   number: string;
@@ -11,41 +8,20 @@ interface CardDetails {
   cvc: string;
 }
 
-const paymongoAxios = axios.create({
-  baseURL: PAYMONGO_API_URL,
-  headers: {
-    Authorization: `Basic ${Buffer.from(PAYMONGO_SECRET_KEY as string).toString('base64')}`,
-    'Content-Type': 'application/json',
-  },
-});
-
 export const createPaymentIntent = async (amount: number, subscriptionId: string) => {
   try {
-    const response = await paymongoAxios.post('/sources', {
-      data: {
-        attributes: {
-          amount: amount * 100, // Paymongo expects amount in cents
-          redirect: {
-            success: `${process.env.NEXT_PUBLIC_APP_URL}/subscription/success`,
-            failed: `${process.env.NEXT_PUBLIC_APP_URL}/subscription/failed`,
-          },
-          type: 'gcash',
-          currency: 'PHP',
-        },
-      },
-    });
-
-    return response.data.data;
+    const invoice = await createInvoice(amount, `Subscription Payment - ${subscriptionId}`);
+    return invoice;
   } catch (error) {
     console.error('Error creating payment intent:', error);
     throw new Error('Failed to create payment intent');
   }
 };
 
-export const verifyPayment = async (paymentIntentId: string) => {
+export const verifyPayment = async (paymentId: string) => {
   try {
-    const response = await paymongoAxios.get(`/sources/${paymentIntentId}`);
-    return response.data.data.attributes.status;
+    const status = await getInvoiceStatus(paymentId);
+    return status.status;
   } catch (error) {
     console.error('Error verifying payment:', error);
     throw new Error('Failed to verify payment');
@@ -54,52 +30,39 @@ export const verifyPayment = async (paymentIntentId: string) => {
 
 export const createPayment = async (amount: number, subscriptionId: string, cardDetails: CardDetails) => {
   try {
-    // Step 1: Create a PaymentMethod
-    const paymentMethodResponse = await paymongoAxios.post('/payment_methods', {
-      data: {
-        attributes: {
-          details: {
-            card_number: cardDetails.number,
-            exp_month: parseInt(cardDetails.exp_month),
-            exp_year: parseInt(cardDetails.exp_year),
-            cvc: cardDetails.cvc,
-          },
-          type: 'card',
-        },
-      },
+    // Create card token
+    const token = await createCardToken({
+      card_number: cardDetails.number,
+      exp_month: parseInt(cardDetails.exp_month),
+      exp_year: parseInt(cardDetails.exp_year),
+      cvc: cardDetails.cvc,
     });
 
-    const paymentMethodId = paymentMethodResponse.data.data.id;
+    // Create charge using the token
+    const charge = await createCardCharge(
+      token.id,
+      amount,
+      `Subscription Payment - ${subscriptionId}`
+    );
 
-    // Step 2: Create a Payment Intent
-    const paymentIntentResponse = await paymongoAxios.post('/payment_intents', {
-      data: {
-        attributes: {
-          amount: amount * 100, // Paymongo expects amount in cents
-          payment_method_allowed: ['card'],
-          payment_method_options: { card: { request_three_d_secure: 'any' } },
-          currency: 'PHP',
-          capture_type: 'automatic',
-        },
-      },
-    });
-
-    const paymentIntentId = paymentIntentResponse.data.data.id;
-
-    // Step 3: Attach PaymentMethod to PaymentIntent
-    const attachResponse = await paymongoAxios.post(`/payment_intents/${paymentIntentId}/attach`, {
-      data: {
-        attributes: {
-          payment_method: paymentMethodId,
-          client_key: process.env.NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY,
-        },
-      },
-    });
-
-    return attachResponse.data.data.attributes.status;
+    return charge.status;
   } catch (error) {
     console.error('Error processing payment:', error);
     throw new Error('Failed to process payment');
+  }
+};
+
+export const createEWalletPayment = async (type: 'GCASH' | 'GRABPAY' | 'PAYMAYA', amount: number, subscriptionId: string) => {
+  try {
+    const charge = await createEWalletCharge(
+      type,
+      amount,
+      `Subscription Payment - ${subscriptionId}`
+    );
+    return charge;
+  } catch (error) {
+    console.error('Error creating e-wallet payment:', error);
+    throw new Error('Failed to create e-wallet payment');
   }
 };
 
@@ -112,7 +75,7 @@ export const paymentApi = api.injectEndpoints({
         body: data,
       }),
     }),
-    verifyPayment: builder.mutation<{ status: string }, { paymentIntentId: string }>({
+    verifyPayment: builder.mutation<{ status: string }, { paymentId: string }>({
       query: (data) => ({
         url: "payments/verify-payment",
         method: "POST",
