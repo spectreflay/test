@@ -116,7 +116,7 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
     } catch (error: any) {
       console.error('Payment error:', error);
       onError(error.message || 'Payment failed');
-      toast.error('Payment failed. Please try again.');
+      toast.error(error.message || 'Payment failed. Please try again.');
     } finally {
       setIsProcessing(false);
     }
