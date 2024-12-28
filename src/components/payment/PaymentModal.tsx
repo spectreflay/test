@@ -76,13 +76,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             // );
   
                // Create subscription plan
-     const plan = await createSubscriptionPlan(
-      subscriptionId,
-      amount,
-      billingCycle,
-      customer.id,
-      paymentMethod.id
-    );
+    //  const plan = await createSubscriptionPlan(
+    //   subscriptionId,
+    //   amount,
+    //   billingCycle,
+    //   customer.id,
+    //   paymentMethod.id
+    // );
             // Update subscription with payment details
             await subscribe({
               subscriptionId,

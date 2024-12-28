@@ -212,32 +212,63 @@ export const createPaymentMethodFromInvoice = async (
       throw new Error("Invoice must be paid to create payment method");
     }
 
-    const paymentType = invoice.payment_method === "EWALLET" ? "EWALLET" : "DEBIT_CARD";
-    const propertiesId =
-      invoice.payment_method === "EWALLET"
-        ? invoice.payment_method_id 
-        : invoice.credit_card_charge_id;
+    // For credit card payments, we need to create a reusable payment method
+    if (invoice.payment_method === "CREDIT_CARD") {
+      const response = await xenditAxios.post("/payment_methods", {
+        type: "DEBIT_CARD",
+        customer_id: customerId,
+        reference_id: `pm-${Date.now()}`,
+        card: {
+          token_id: invoice.credit_card_charge_id // Use the charge ID as token
+        },
+        billing_information: {
+          email: invoice.customer?.email,
+          name: invoice.customer ? 
+            `${invoice.customer.given_names} ${invoice.customer.surname || ""}`.trim() : 
+            "Unknown Customer"
+        },
+        metadata: {
+          invoice_id: invoiceId
+        },
+        properties: {
+          id: invoice.credit_card_charge_id
+        }
+      });
+      return response.data;
+    }
 
-    const response = await xenditAxios.post("/payment_methods", {
-      type: paymentType,
-      customer_id: customerId,
-      reference_id: `pm-${Date.now()}`,
-      billing_information: {
-        email: invoice.customer.email,
-        name: `${invoice.customer.given_names} ${invoice.customer.surname || ""}`,
-      },
-      metadata: {
-        invoice_id: invoiceId,
-      },
-      properties: {
-        id: propertiesId,
-      }
-    });
-    return response.data;
+    // For e-wallets, create a payment method with the ewallet type
+    if (invoice.payment_method === "EWALLET") {
+      const response = await xenditAxios.post("/payment_methods", {
+        type: "EWALLET",
+        ewallet: {
+          channel: invoice.payment_method, // e.g., "GCASH", "GRABPAY", etc.
+          channel_properties: {
+            success_return_url: invoice.success_redirect_url,
+            failure_return_url: invoice.failure_redirect_url
+          }
+        },
+        customer_id: customerId,
+        reference_id: `pm-${Date.now()}`,
+        billing_information: {
+          email: invoice.customer?.email,
+          name: invoice.customer ? 
+            `${invoice.customer.given_names} ${invoice.customer.surname || ""}`.trim() : 
+            "Unknown Customer"
+        },
+        metadata: {
+          invoice_id: invoiceId
+        },
+      });
+      return response.data;
+    }
+
+    throw new Error(`Unsupported payment method: ${invoice.payment_method}`);
   } catch (error) {
     handleXenditError(error);
   }
 };
+
 
 // Pause subscription
 export const pauseSubscription = async (subscriptionId: string) => {
