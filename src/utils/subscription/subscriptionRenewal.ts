@@ -1,5 +1,4 @@
-import { addDays } from 'date-fns';
-import { createCardToken, createCardCharge } from '../xendit';
+import { createRecurringPayment, stopRecurringPayment } from '../xendit';
 import { store } from '../../store';
 import { subscriptionApi } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
@@ -17,90 +16,97 @@ interface RenewalDetails {
   };
 }
 
-export const handleAutoRenewal = async (details: RenewalDetails) => {
+export const setupRecurringPayment = async (details: RenewalDetails, tokenId: string) => {
   try {
-    // Get current subscription
-    const { data: currentSubscription } = await store.dispatch(
-      subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
-        forceRefetch: true
-      })
-    );
-
-    if (!currentSubscription?.paymentDetails?.cardDetails) {
-      throw new Error('Card details not found for auto-renewal');
-    }
-
-    const cardDetails = currentSubscription.paymentDetails.cardDetails;
-
-    // Create new card token
-    const cardToken = await createCardToken({
-      card_number: cardDetails.cardNumber,
-      exp_month: cardDetails.expMonth,
-      exp_year: cardDetails.expYear,
-      cvc: '', // CVC not stored for security
-    });
-
-    // Create charge
-    const charge = await createCardCharge(
-      cardToken.id,
+    // Create recurring payment with Xendit
+    const recurringPayment = await createRecurringPayment(
+      tokenId,
       details.amount,
-      `Subscription Auto-Renewal - ${details.subscriptionId}`
+      details.billingCycle,
+      `Subscription - ${details.subscriptionId}`
     );
 
-    if (charge.status === 'CAPTURED') {
-      // Calculate new subscription dates
-      const startDate = new Date();
-      const endDate = details.billingCycle === 'yearly'
-        ? addDays(startDate, 365)
-        : addDays(startDate, 30);
+    // Update subscription with recurring payment ID
+    await store.dispatch(
+      subscriptionApi.endpoints.subscribe.initiate({
+        subscriptionId: details.subscriptionId,
+        paymentMethod: 'card',
+        billingCycle: details.billingCycle,
+        autoRenew: true,
+        paymentDetails: {
+          paymentId: recurringPayment.id,
+          recurringPaymentId: recurringPayment.recurring_payment_id,
+          amount: details.amount,
+          status: 'active',
+          cardDetails: details.cardDetails
+        },
+      })
+    ).unwrap();
 
-      // Update subscription
-      await store.dispatch(
-        subscriptionApi.endpoints.subscribe.initiate({
-          subscriptionId: details.subscriptionId,
-          paymentMethod: 'card',
-          billingCycle: details.billingCycle,
-          autoRenew: true,
-          paymentDetails: {
-            paymentId: charge.id,
-            amount: details.amount,
-            status: 'completed',
-            cardDetails
-          },
-        })
-      ).unwrap();
+    await createNotification(
+      store.dispatch,
+      'Automatic subscription renewal has been set up successfully.',
+      'system'
+    );
 
-      await createNotification(
-        store.dispatch,
-        'Your subscription has been automatically renewed.',
-        'system'
-      );
+    toast.success('Subscription auto-renewal configured successfully');
 
-      toast.success('Subscription renewed successfully');
-
-      return {
-        success: true,
-        paymentId: charge.id,
-        status: 'completed'
-      };
-    } else {
-      throw new Error('Payment failed');
-    }
+    return {
+      success: true,
+      recurringPaymentId: recurringPayment.recurring_payment_id
+    };
   } catch (error: any) {
-    console.error('Auto-renewal failed:', error);
+    console.error('Failed to set up recurring payment:', error);
     
     await createNotification(
       store.dispatch,
-      'Automatic subscription renewal failed. Please update your payment method or renew manually.',
+      'Failed to set up automatic subscription renewal.',
       'alert'
     );
 
-    toast.error('Failed to renew subscription');
+    toast.error('Failed to set up auto-renewal');
 
     return {
       success: false,
-      status: 'failed',
-      message: error.message || 'Failed to process auto-renewal'
+      error: error.message
+    };
+  }
+};
+
+export const cancelRecurringPayment = async (recurringPaymentId: string) => {
+  try {
+    await stopRecurringPayment(recurringPaymentId);
+    
+    await store.dispatch(
+      subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+        status: 'cancelled',
+        autoRenew: false
+      })
+    ).unwrap();
+
+    await createNotification(
+      store.dispatch,
+      'Subscription auto-renewal has been cancelled.',
+      'system'
+    );
+
+    toast.success('Auto-renewal cancelled successfully');
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to cancel recurring payment:', error);
+    
+    await createNotification(
+      store.dispatch,
+      'Failed to cancel automatic subscription renewal.',
+      'alert'
+    );
+
+    toast.error('Failed to cancel auto-renewal');
+
+    return {
+      success: false,
+      error: error.message
     };
   }
 };

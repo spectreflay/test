@@ -1,4 +1,4 @@
-import { addDays } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { store } from '../../store';
 import { subscriptionApi } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
@@ -43,80 +43,54 @@ class SubscriptionManager {
     };
   }
 
-  private async checkAndUpdateSubscriptionStatus() {
-    try {
-      const result = await store.dispatch(
-        subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
-          forceRefetch: true
+ // Update the checkAndUpdateSubscriptionStatus method
+private async checkAndUpdateSubscriptionStatus() {
+  try {
+    const result = await store.dispatch(
+      subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
+        forceRefetch: true
+      })
+    );
+
+    if (!result.data) return;
+
+    const subscription = result.data;
+    const details = this.getSubscriptionDetails(subscription);
+    const now = new Date();
+    const endDate = new Date(subscription.endDate);
+    const warningDate = addDays(endDate, -this.RENEWAL_WARNING_DAYS);
+
+    // Handle near expiration warning
+    if (details.isNearExpiration && subscription.status === 'active') {
+      const message = subscription.autoRenew
+        ? `Your subscription will be automatically renewed on ${format(endDate, 'MMM dd, yyyy')}.`
+        : `Your subscription will expire on ${format(endDate, 'MMM dd, yyyy')}. Please renew to avoid service interruption.`;
+      
+      await createNotification(
+        store.dispatch,
+        message,
+        subscription.autoRenew ? 'info' : 'alert'
+      );
+    }
+
+    // Handle expired subscription - Xendit will handle the renewal automatically
+    if (details.isExpired && subscription.status !== 'expired' && !subscription.autoRenew) {
+      await store.dispatch(
+        subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+          status: 'expired'
         })
       );
-
-      if (!result.data) return;
-
-      const subscription = result.data;
-      const details = this.getSubscriptionDetails(subscription);
-      const now = new Date();
-      const endDate = new Date(subscription.endDate);
-      const warningDate = addDays(endDate, -this.RENEWAL_WARNING_DAYS);
-
-      // Handle expired subscription
-      if (details.isExpired && subscription.status !== 'expired') {
-        if (subscription.autoRenew && subscription.paymentMethod === 'card') {
-          // Attempt auto-renewal
-          const renewalResult = await handleAutoRenewal({
-            subscriptionId: subscription.subscription._id,
-            amount: subscription.billingCycle === 'yearly' 
-              ? subscription.subscription.yearlyPrice 
-              : subscription.subscription.monthlyPrice,
-            billingCycle: subscription.billingCycle,
-            cardDetails: subscription.paymentDetails?.cardDetails
-          });
-
-          if (renewalResult.success) {
-            await createNotification(
-              store.dispatch,
-              'Your subscription has been automatically renewed.',
-              'system'
-            );
-          } else {
-            await store.dispatch(
-              subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
-                status: 'expired'
-              })
-            );
-            await this.applyFreePlan();
-            await createNotification(
-              store.dispatch,
-              'Automatic renewal failed. Please update your payment method.',
-              'alert'
-            );
-          }
-        } else {
-          await store.dispatch(
-            subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
-              status: 'expired'
-            })
-          );
-          await this.applyFreePlan();
-        }
-      }
-      // Handle near expiration warning
-      else if (details.isNearExpiration && subscription.status === 'active') {
-        const message = subscription.autoRenew && subscription.paymentMethod === 'card'
-          ? `Your subscription will be automatically renewed in ${this.RENEWAL_WARNING_DAYS} days.`
-          : `Your subscription will expire in ${this.RENEWAL_WARNING_DAYS} days. Please renew to avoid service interruption.`;
-        
-        await createNotification(
-          store.dispatch,
-          message,
-          subscription.autoRenew ? 'info' : 'alert'
-        );
-      }
-    } catch (error) {
-      console.error('Error checking subscription status:', error);
+      await this.applyFreePlan();
+      await createNotification(
+        store.dispatch,
+        'Your subscription has expired. Please renew to restore access to premium features.',
+        'alert'
+      );
     }
+  } catch (error) {
+    console.error('Error checking subscription status:', error);
   }
-
+}
   private async applyFreePlan() {
     try {
       const result = await store.dispatch(

@@ -167,24 +167,52 @@ router.post('/cancel', protect, async (req, res) => {
 // Update subscription status
 router.put('/status', protect, async (req, res) => {
   try {
-    const { status } = req.body; // Expecting { status: 'active' | 'cancelled' | 'expired' }
+    const { status } = req.body;
 
     // Find the user's active subscription
     const subscription = await UserSubscription.findOne({
       user: req.user._id,
-      status: { $ne: 'cancelled' } // Exclude cancelled subscriptions
+      status: { $ne: 'cancelled' }
     });
 
     if (!subscription) {
       return res.status(404).json({ message: 'No active subscription found' });
     }
 
-    // Update the subscription status
-    subscription.status = status;
-    await subscription.save();
+    // Update the subscription status while preserving the original payment method
+    const updatedSubscription = await UserSubscription.findOneAndUpdate(
+      { _id: subscription._id },
+      { 
+        status,
+        // Only update these fields if status is 'expired'
+        ...(status === 'expired' ? {
+          endDate: new Date(),
+          autoRenew: false
+        } : {})
+      },
+      { new: true }
+    );
 
-    res.json({ message: 'Subscription status updated successfully', subscription });
+    // Create subscription history entry
+    await SubscriptionHistory.create({
+      user: req.user._id,
+      subscription: subscription.subscription,
+      action: status === 'expired' ? 'cancelled' : 'billing_cycle_changed',
+      reason: status === 'expired' ? 'subscription_expired' : 'status_update',
+      billingCycle: subscription.billingCycle,
+      startDate: subscription.startDate,
+      endDate: subscription.endDate,
+      autoRenew: false,
+      paymentMethod: subscription.paymentMethod,
+      paymentDetails: subscription.paymentDetails
+    });
+
+    res.json({ 
+      message: 'Subscription status updated successfully', 
+      subscription: updatedSubscription 
+    });
   } catch (error) {
+    console.error('Error updating subscription status:', error);
     res.status(400).json({ message: error.message });
   }
 });
