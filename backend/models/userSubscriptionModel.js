@@ -58,7 +58,7 @@ const userSubscriptionSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay']
+    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay','CREDIT_CARD']
   },
   paymentDetails: {
     paymentId: String,
