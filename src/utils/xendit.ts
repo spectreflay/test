@@ -90,22 +90,24 @@ export const createCustomer = async (
 export const createSubscriptionPlan = async (
   name: string,
   amount: number,
-  interval: "month" | "year"
+  interval: "month" | "year",
+  customerId: string,
+  paymentMethodId: string,
 ) => {
   try {
     const referenceId = `plan-${Date.now()}`;
-    
+    console.log(customerId);
     // Log the interval value for debugging
     console.log("Interval value before API call:", interval.toUpperCase());
 
     const response = await xenditAxios.post("/recurring/plans", {
       reference_id: referenceId,
-      customer_id: "cust-239c16f4-866d-43e8-9341-7badafbc019f", // This will be replaced with actual customer ID
+      customer_id: customerId, // This will be replaced with actual customer ID
       recurring_action: "PAYMENT",
       currency: "PHP",
       amount: amount,
       payment_methods: [{
-        payment_method_id: "pm-asdaso213897821hdas", // This will be replaced with actual payment method ID
+        payment_method_id: paymentMethodId, // This will be replaced with actual payment method ID
         rank: 1
       }],
       schedule: {
@@ -205,12 +207,19 @@ export const createPaymentMethodFromInvoice = async (
 ) => {
   try {
     const invoice = await getInvoiceStatus(invoiceId);
+    console.log(invoice)
     if (invoice.status !== "PAID") {
       throw new Error("Invoice must be paid to create payment method");
     }
 
+    const paymentType = invoice.payment_method === "EWALLET" ? "EWALLET" : "DEBIT_CARD";
+    const propertiesId =
+      invoice.payment_method === "EWALLET"
+        ? invoice.payment_method_id 
+        : invoice.credit_card_charge_id;
+
     const response = await xenditAxios.post("/payment_methods", {
-      type: invoice.payment_method,
+      type: paymentType,
       customer_id: customerId,
       reference_id: `pm-${Date.now()}`,
       billing_information: {
@@ -220,6 +229,9 @@ export const createPaymentMethodFromInvoice = async (
       metadata: {
         invoice_id: invoiceId,
       },
+      properties: {
+        id: propertiesId,
+      }
     });
     return response.data;
   } catch (error) {
@@ -257,6 +269,17 @@ export const stopSubscription = async (subscriptionId: string) => {
     const response = await xenditAxios.post(
       `/recurring_payments/subscriptions/${subscriptionId}/stop`
     );
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+export const getPaymentMethods = async (customerId:string) => {
+  try {
+    const response = await xenditAxios.get(`/payment_methods`, {
+      params: { customer_id: customerId }
+    });
     return response.data;
   } catch (error) {
     handleXenditError(error);

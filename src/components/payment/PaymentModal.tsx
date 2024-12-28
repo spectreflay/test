@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, CreditCard, AlertCircle } from "lucide-react";
+import { X, CreditCard, AlertCircle } from 'lucide-react';
 import PaymentSummary from "./PaymentSummary";
 import { createInvoice, createCustomer, createSubscriptionPlan, createPaymentMethodFromInvoice, createSubscription, getInvoiceStatus } from "../../utils/xendit";
 import { useSubscribeMutation } from "../../store/services/subscriptionService";
@@ -38,24 +38,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         user?.name || '',
         user?.email || ''
       );
+  
+   
 
-      // Create subscription plan
-      const plan = await createSubscriptionPlan(
-        subscriptionId,
-        amount,
-        billingCycle
-      );
-      
       // Create initial invoice
       const invoice = await createInvoice(
         amount,
         `Subscription Payment - ${subscriptionId}`,
         customer.id
       );
-
+  
       // Open Xendit payment page in a new window
       const paymentWindow = window.open(invoice.invoice_url, 'xenditPayment', 'width=600,height=600');
-
+  
       // Start polling for payment status
       const pollInterval = setInterval(async () => {
         try {
@@ -66,17 +61,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             if (paymentWindow) {
               paymentWindow.close();
             }
-
+  
             // Create payment method from successful invoice
             const paymentMethod = await createPaymentMethodFromInvoice(invoice.id, customer.id);
-
+  
+            // Log the payment method ID for debugging
+            console.log("Payment Method ID:", paymentMethod.id);
+  
             // Create subscription with the payment method
-            const xenditSubscription = await createSubscription(
-              plan.id,
-              customer.id,
-              paymentMethod.id
-            );
-
+            // const xenditSubscription = await createSubscription(
+            //   plan.id,
+            //   customer.id,
+            //   paymentMethod.id // Ensure this is a valid payment method ID
+            // );
+  
+               // Create subscription plan
+     const plan = await createSubscriptionPlan(
+      subscriptionId,
+      amount,
+      billingCycle,
+      customer.id,
+      paymentMethod.id
+    );
             // Update subscription with payment details
             await subscribe({
               subscriptionId,
@@ -92,7 +98,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 paymentMethodId: paymentMethod.id
               }
             }).unwrap();
-
+  
             setIsProcessing(false);
             toast.success('Payment successful!');
             onSuccess();
@@ -108,10 +114,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           console.error('Error checking payment status:', error);
         }
       }, 3000); // Check every 3 seconds
-
+  
       // Cleanup interval if modal is closed
       return () => clearInterval(pollInterval);
-
+  
     } catch (error) {
       console.error('Payment error:', error);
       toast.error('Failed to initiate payment');
@@ -179,3 +185,4 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 };
 
 export default PaymentModal;
+
