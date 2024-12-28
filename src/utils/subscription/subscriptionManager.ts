@@ -1,6 +1,6 @@
-import { addDays, addMinutes } from 'date-fns';
+import { addDays } from 'date-fns';
 import { store } from '../../store';
-import { subscriptionApi, UserSubscription } from '../../store/services/subscriptionService';
+import { subscriptionApi } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
 import { SUBSCRIPTION_FEATURES } from './subscriptionFeatures';
 import { handleAutoRenewal } from './subscriptionRenewal';
@@ -9,6 +9,7 @@ class SubscriptionManager {
   private static instance: SubscriptionManager;
   private checkInterval: NodeJS.Timeout | null = null;
   private readonly CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+  private readonly RENEWAL_WARNING_DAYS = 3; // Days before expiration to warn user
 
   private constructor() {
     this.startExpirationCheck();
@@ -21,36 +22,25 @@ class SubscriptionManager {
     return SubscriptionManager.instance;
   }
 
-  public getSubscriptionDetails(subscription: UserSubscription) {
-    const isExpired = this.isExpired(subscription);
-    const features = subscription.subscription.features;
-    const limits = {
-      products: isExpired ? 10 : subscription.subscription.maxProducts,
-      staff: isExpired ? 2 : subscription.subscription.maxStaff,
-      stores: isExpired ? 1 : subscription.subscription.maxStores
-    };
-    const isNearExpiration = this.isNearExpiration(subscription);
+  public getSubscriptionDetails(subscription: any) {
+    const now = new Date();
+    const endDate = new Date(subscription.endDate);
+    const warningDate = addDays(endDate, -this.RENEWAL_WARNING_DAYS);
+    
     return {
-      isExpired,
-      isNearExpiration,
-      features,
-      limits,
-      tier: isExpired ? 'none' : subscription.subscription.name,
-      expiryDate: subscription.endDate || null
+      isExpired: now > endDate,
+      isNearExpiration: now >= warningDate && now < endDate,
+      features: subscription.subscription.features,
+      limits: {
+        products: subscription.subscription.maxProducts,
+        staff: subscription.subscription.maxStaff,
+        stores: subscription.subscription.maxStores
+      },
+      tier: subscription.subscription.name,
+      expiryDate: subscription.endDate,
+      autoRenew: subscription.autoRenew,
+      paymentMethod: subscription.paymentMethod
     };
-  }
-
-  public isExpired(subscription: UserSubscription): boolean {
-    const now = new Date();
-    return new Date(subscription.endDate) < now;
-  }
-
-  public isNearExpiration(subscription: UserSubscription, days: number = 1): boolean {
-    const now = new Date();
-    const expirationDate = new Date(subscription.endDate);
-    const warningDate = new Date(expirationDate);
-    warningDate.setDate(expirationDate.getDate() - days);
-    return now >= warningDate && now < expirationDate;
   }
 
   private async checkAndUpdateSubscriptionStatus() {
@@ -60,61 +50,67 @@ class SubscriptionManager {
           forceRefetch: true
         })
       );
-  
-      if (result.data) {
-        const subscription = result.data;
-        const now = new Date();
-        const endDate = new Date(subscription.endDate);
-        const warningDate = addDays(endDate, -3); // 3 days before expiration
-  
-        // Check if subscription is expired
-        if (now > endDate && subscription.status !== 'expired') {
-          if (subscription.autoRenew && subscription.paymentMethod === 'card') {
-            // Attempt auto-renewal
-            const renewalResult = await handleAutoRenewal({
-              subscriptionId: subscription.subscription._id,
-              amount: subscription.billingCycle === 'yearly' 
-                ? subscription.subscription.yearlyPrice 
-                : subscription.subscription.monthlyPrice,
-              billingCycle: subscription.billingCycle,
-              cardDetails: subscription.paymentDetails?.cardDetails,
-            });
-  
-            if (!renewalResult.success) {
-              // Update subscription status to expired if renewal fails
-              await store.dispatch(
-                subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
-                  status: 'expired'
-                })
-              );
-              await this.applyFreePlan();
-            }
+
+      if (!result.data) return;
+
+      const subscription = result.data;
+      const details = this.getSubscriptionDetails(subscription);
+      const now = new Date();
+      const endDate = new Date(subscription.endDate);
+      const warningDate = addDays(endDate, -this.RENEWAL_WARNING_DAYS);
+
+      // Handle expired subscription
+      if (details.isExpired && subscription.status !== 'expired') {
+        if (subscription.autoRenew && subscription.paymentMethod === 'card') {
+          // Attempt auto-renewal
+          const renewalResult = await handleAutoRenewal({
+            subscriptionId: subscription.subscription._id,
+            amount: subscription.billingCycle === 'yearly' 
+              ? subscription.subscription.yearlyPrice 
+              : subscription.subscription.monthlyPrice,
+            billingCycle: subscription.billingCycle,
+            cardDetails: subscription.paymentDetails?.cardDetails
+          });
+
+          if (renewalResult.success) {
+            await createNotification(
+              store.dispatch,
+              'Your subscription has been automatically renewed.',
+              'system'
+            );
           } else {
-            // Update subscription status to expired
             await store.dispatch(
               subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
                 status: 'expired'
               })
             );
             await this.applyFreePlan();
-          }
-        }
-        // Check if subscription is about to expire
-        else if (now > warningDate && subscription.status === 'active') {
-          if (subscription.autoRenew && subscription.paymentMethod === 'card') {
             await createNotification(
               store.dispatch,
-              'Your subscription will be automatically renewed in 3 days.',
-              'info'
-            );
-          } else {
-            await createNotification(
-              store.dispatch,
-              'Your subscription will expire in 3 days. Please renew to avoid service interruption.',
+              'Automatic renewal failed. Please update your payment method.',
               'alert'
             );
           }
+        } else {
+          await store.dispatch(
+            subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+              status: 'expired'
+            })
+          );
+          await this.applyFreePlan();
         }
+      }
+      // Handle near expiration warning
+      else if (details.isNearExpiration && subscription.status === 'active') {
+        const message = subscription.autoRenew && subscription.paymentMethod === 'card'
+          ? `Your subscription will be automatically renewed in ${this.RENEWAL_WARNING_DAYS} days.`
+          : `Your subscription will expire in ${this.RENEWAL_WARNING_DAYS} days. Please renew to avoid service interruption.`;
+        
+        await createNotification(
+          store.dispatch,
+          message,
+          subscription.autoRenew ? 'info' : 'alert'
+        );
       }
     } catch (error) {
       console.error('Error checking subscription status:', error);
@@ -123,7 +119,6 @@ class SubscriptionManager {
 
   private async applyFreePlan() {
     try {
-      // Get free tier subscription
       const result = await store.dispatch(
         subscriptionApi.endpoints.getSubscriptions.initiate(undefined, {
           forceRefetch: true
@@ -143,7 +138,6 @@ class SubscriptionManager {
           })
         ).unwrap();
 
-        // Force refetch current subscription
         await store.dispatch(
           subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
             forceRefetch: true
@@ -160,7 +154,7 @@ class SubscriptionManager {
       clearInterval(this.checkInterval);
     }
 
-    // Run initial check immediately
+    // Run initial check
     this.checkAndUpdateSubscriptionStatus();
 
     // Set up periodic checks
