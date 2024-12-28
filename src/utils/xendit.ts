@@ -37,7 +37,7 @@ export const createInvoice = async (
       invoice_duration: 86400, // 24 hours
       should_send_email: true,
       reminder_time: 1, // Send reminder after 1 hour
-      customer_id: customerId, // Link invoice to customer if provided
+      customer_id: customerId,
       items: [
         {
           name: description,
@@ -67,16 +67,18 @@ export const createCustomer = async (
   mobileNumber?: string
 ) => {
   try {
+    const [firstName, ...lastNameParts] = name.split(" ");
+    const lastName = lastNameParts.join(" ") || firstName;
+
     const response = await xenditAxios.post("/customers", {
       reference_id: `cust-${Date.now()}`,
-      email,
-      mobile_number: mobileNumber,
       type: "INDIVIDUAL",
-      description: IS_DEVELOPMENT ? "Test customer" : "POS System customer",
       individual_detail: {
-        given_names: name.split(" ")[0],
-        surname: name.split(" ").slice(1).join(" ") || name.split(" ")[0],
+        given_names: firstName,
+        surname: lastName,
       },
+      email,
+      mobile_number: mobileNumber || "+639123456789", // Provide default for development
     });
     return response.data;
   } catch (error) {
@@ -91,36 +93,54 @@ export const createSubscriptionPlan = async (
   interval: "month" | "year"
 ) => {
   try {
+    const referenceId = `plan-${Date.now()}`;
+    
+    // Log the interval value for debugging
+    console.log("Interval value before API call:", interval.toUpperCase());
+
     const response = await xenditAxios.post("/recurring/plans", {
-      reference_id: `plan-${Date.now()}`,
-      customer_id: "cust-00000000-0000-0000-0000-000000000000", // Replace with actual customer ID
+      reference_id: referenceId,
+      customer_id: "cust-239c16f4-866d-43e8-9341-7badafbc019f", // This will be replaced with actual customer ID
       recurring_action: "PAYMENT",
       currency: "PHP",
       amount: amount,
-      payment_methods: [
+      payment_methods: [{
+        payment_method_id: "pm-asdaso213897821hdas", // This will be replaced with actual payment method ID
+        rank: 1
+      }],
+      schedule: {
+        reference_id: `schedule-${referenceId}`,
+        interval: interval === "month" ? "MONTH" : "YEAR", // Ensure this is in uppercase
+        interval_count: 1,
+        total_recurrence: interval === "year" ? 1 : 12, // Set to 1 for yearly plans, 12 for monthly
+        retry_interval: "DAY",
+        retry_interval_count: 3,
+        total_retry: 2,
+        failed_attempt_notifications: [1, 2]
+      },
+      immediate_action_type: "FULL_AMOUNT",
+      notification_config: {
+        recurring_created: ["EMAIL"],
+        recurring_succeeded: ["EMAIL"],
+        recurring_failed: ["EMAIL"],
+        locale: "en"
+      },
+      failed_cycle_action: "STOP",
+      payment_link_for_failed_attempt: true,
+      description: `${name} Subscription Plan`,
+      items: [
         {
-          payment_method_id: "pm-00000000-0000-0000-0000-000000000000", // Replace with actual payment method ID
-          rank: 1,
-          type: "CREDIT_CARD",
-          reusability: "MULTIPLE_USE",
-          status: "ACTIVE"
-        },
-        {
-          payment_method_id: "pm-11111111-1111-1111-1111-111111111111", // Replace with actual payment method ID
-          rank: 2,
-          type: "DIRECT_DEBIT",
-          reusability: "MULTIPLE_USE",
-          status: "ACTIVE"
+          type: "DIGITAL_PRODUCT",
+          name: name,
+          net_unit_amount: amount,
+          quantity: 1,
+          url: window.location.origin,
+          category: "Software",
+          subcategory: "POS System"
         }
       ],
-      description: `${name} subscription plan`,
       success_return_url: `${window.location.origin}/subscription?status=success`,
-      failure_return_url: `${window.location.origin}/subscription?status=failed`,
-      schedule: {
-        interval_count: 1,
-        interval: interval.toUpperCase(),
-        total_recurrence: 0, // 0 means it will recur indefinitely
-      }
+      failure_return_url: `${window.location.origin}/subscription?status=failed`
     });
     return response.data;
   } catch (error) {
@@ -135,24 +155,21 @@ export const createSubscription = async (
   paymentMethodId: string
 ) => {
   try {
-    const response = await xenditAxios.post(
-      "/recurring_payments/subscriptions",
-      {
-        reference_id: `sub-${Date.now()}`,
-        plan_id: planId,
-        customer_id: customerId,
-        payment_method_id: paymentMethodId,
-        immediate_charge: true,
-        currency: "PHP",
-        success_return_url: `${window.location.origin}/subscription?status=success`,
-        failure_return_url: `${window.location.origin}/subscription?status=failed`,
-        rewrite_return_url: true,
-        notification_config: {
-          payment_success: true,
-          payment_failure: true,
-        },
-      }
-    );
+    const response = await xenditAxios.post("/recurring_payments/subscriptions", {
+      reference_id: `sub-${Date.now()}`,
+      plan_id: planId,
+      customer_id: customerId,
+      payment_method_id: paymentMethodId,
+      immediate_charge: true,
+      currency: "PHP",
+      success_return_url: `${window.location.origin}/subscription?status=success`,
+      failure_return_url: `${window.location.origin}/subscription?status=failed`,
+      rewrite_return_url: true,
+      notification_config: {
+        payment_success: true,
+        payment_failure: true,
+      },
+    });
     return response.data;
   } catch (error) {
     handleXenditError(error);
@@ -192,15 +209,13 @@ export const createPaymentMethodFromInvoice = async (
       throw new Error("Invoice must be paid to create payment method");
     }
 
-    // Create payment method from the successful payment
     const response = await xenditAxios.post("/payment_methods", {
       type: invoice.payment_method,
       customer_id: customerId,
       reference_id: `pm-${Date.now()}`,
       billing_information: {
         email: invoice.customer.email,
-        name:
-          invoice.customer.given_names + " " + (invoice.customer.surname || ""),
+        name: `${invoice.customer.given_names} ${invoice.customer.surname || ""}`,
       },
       metadata: {
         invoice_id: invoiceId,
@@ -247,4 +262,3 @@ export const stopSubscription = async (subscriptionId: string) => {
     handleXenditError(error);
   }
 };
-
