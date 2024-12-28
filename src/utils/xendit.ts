@@ -191,3 +191,115 @@ export const createEWalletCharge = async (
     handleXenditError(error);
   }
 };
+
+// Create a subscription plan in Xendit
+export const createSubscriptionPlan = async (
+  name: string,
+  amount: number,
+  interval: 'month' | 'year'
+) => {
+  try {
+    const response = await xenditAxios.post('/v2/subscription_plans', {
+      name,
+      amount,
+      currency: 'PHP',
+      interval,
+      description: `${name} subscription plan`,
+      success_return_url: `${window.location.origin}/subscription?status=success`,
+      failure_return_url: `${window.location.origin}/subscription?status=failed`,
+    });
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Create a subscription for a customer
+export const createSubscription = async (
+  planId: string,
+  customerId: string,
+  cardToken: string
+) => {
+  try {
+    const response = await xenditAxios.post('/v2/subscriptions', {
+      plan_id: planId,
+      customer_id: customerId,
+      payment_method: {
+        type: 'CREDIT_CARD',
+        token_id: cardToken,
+        authentication_id: cardToken,
+        card_info: {
+          token_id: cardToken
+        }
+      },
+      immediate_charge: true,
+      currency: 'PHP',
+      success_return_url: `${window.location.origin}/subscription?status=success`,
+      failure_return_url: `${window.location.origin}/subscription?status=failed`,
+    });
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Get subscription status
+export const getSubscriptionStatus = async (subscriptionId: string) => {
+  try {
+    const response = await xenditAxios.get(`/v2/subscriptions/${subscriptionId}`);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Pause subscription
+export const pauseSubscription = async (subscriptionId: string) => {
+  try {
+    const response = await xenditAxios.post(`/v2/subscriptions/${subscriptionId}/pause`);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Resume subscription
+export const resumeSubscription = async (subscriptionId: string) => {
+  try {
+    const response = await xenditAxios.post(`/v2/subscriptions/${subscriptionId}/resume`);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Stop subscription
+export const stopSubscription = async (subscriptionId: string) => {
+  try {
+    const response = await xenditAxios.post(`/v2/subscriptions/${subscriptionId}/stop`);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Create customer in Xendit
+export const createCustomer = async (
+  name: string,
+  email: string,
+  mobileNumber?: string
+) => {
+  try {
+    const response = await xenditAxios.post('/v2/customers', {
+      reference_id: `cust-${Date.now()}`,
+      given_names: name,
+      email,
+      mobile_number: mobileNumber,
+      type: 'INDIVIDUAL',
+      description: IS_DEVELOPMENT ? 'Test customer' : 'POS System customer'
+    });
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};

@@ -4,6 +4,7 @@ import { subscriptionApi } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
 import { SUBSCRIPTION_FEATURES } from './subscriptionFeatures';
 import { handleAutoRenewal } from './subscriptionRenewal';
+import { createCustomer, createSubscription, createSubscriptionPlan, getSubscriptionStatus } from '../xendit';
 
 class SubscriptionManager {
   private static instance: SubscriptionManager;
@@ -39,12 +40,73 @@ class SubscriptionManager {
       tier: subscription.subscription.name,
       expiryDate: subscription.endDate,
       autoRenew: subscription.autoRenew,
-      paymentMethod: subscription.paymentMethod
+      paymentMethod: subscription.paymentMethod,
+      xenditSubscriptionId: subscription.paymentDetails?.xenditSubscriptionId
     };
   }
 
+  private async handleAutoRenewal(subscription: any) {
+    try {
+      // Only attempt auto-renewal for credit card subscriptions
+      if (subscription.paymentMethod !== 'card' || !subscription.autoRenew) {
+        return false;
+      }
+
+      const cardDetails = subscription.paymentDetails?.cardDetails;
+      if (!cardDetails) {
+        throw new Error('No card details found');
+      }
+
+      // Create or get customer
+      const customer = await createCustomer(
+        subscription.user.name,
+        subscription.user.email
+      );
+
+      // Create or get subscription plan
+      const planAmount = subscription.billingCycle === 'yearly' 
+        ? subscription.subscription.yearlyPrice 
+        : subscription.subscription.monthlyPrice;
+
+      const plan = await createSubscriptionPlan(
+        subscription.subscription.name,
+        planAmount,
+        subscription.billingCycle === 'yearly' ? 'year' : 'month'
+      );
+
+      // Create new subscription
+      const xenditSubscription = await createSubscription(
+        plan.id,
+        customer.id,
+        subscription.paymentDetails.cardToken
+      );
+
+      // Update subscription with Xendit subscription ID
+      await store.dispatch(
+        subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+          status: 'active',
+          paymentDetails: {
+            ...subscription.paymentDetails,
+            xenditSubscriptionId: xenditSubscription.id
+          }
+        })
+      );
+
+      await createNotification(
+        store.dispatch,
+        'Your subscription has been automatically renewed.',
+        'system'
+      );
+
+      return true;
+    } catch (error) {
+      console.error('Auto-renewal failed:', error);
+      return false;
+    }
+  }
+
  // Update the checkAndUpdateSubscriptionStatus method
-private async checkAndUpdateSubscriptionStatus() {
+ private async checkAndUpdateSubscriptionStatus() {
   try {
     const result = await store.dispatch(
       subscriptionApi.endpoints.getCurrentSubscription.initiate(undefined, {
@@ -60,6 +122,22 @@ private async checkAndUpdateSubscriptionStatus() {
     const endDate = new Date(subscription.endDate);
     const warningDate = addDays(endDate, -this.RENEWAL_WARNING_DAYS);
 
+    // Check Xendit subscription status if exists
+    if (details.xenditSubscriptionId) {
+      const xenditStatus = await getSubscriptionStatus(details.xenditSubscriptionId);
+      if (xenditStatus.status === 'ACTIVE') {
+        // Update local subscription status if needed
+        if (subscription.status !== 'active') {
+          await store.dispatch(
+            subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+              status: 'active'
+            })
+          );
+        }
+        return;
+      }
+    }
+
     // Handle near expiration warning
     if (details.isNearExpiration && subscription.status === 'active') {
       const message = subscription.autoRenew
@@ -73,19 +151,25 @@ private async checkAndUpdateSubscriptionStatus() {
       );
     }
 
-    // Handle expired subscription - Xendit will handle the renewal automatically
-    if (details.isExpired && subscription.status !== 'expired' && !subscription.autoRenew) {
-      await store.dispatch(
-        subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
-          status: 'expired'
-        })
-      );
-      await this.applyFreePlan();
-      await createNotification(
-        store.dispatch,
-        'Your subscription has expired. Please renew to restore access to premium features.',
-        'alert'
-      );
+    // Handle expired subscription
+    if (details.isExpired && subscription.status !== 'expired') {
+      // Attempt auto-renewal for credit card subscriptions
+      const renewalSuccess = await this.handleAutoRenewal(subscription);
+
+      if (!renewalSuccess) {
+        // If auto-renewal fails or isn't available, switch to free plan
+        await store.dispatch(
+          subscriptionApi.endpoints.updateSubscriptionStatus.initiate({
+            status: 'expired'
+          })
+        );
+        await this.applyFreePlan();
+        await createNotification(
+          store.dispatch,
+          'Your subscription has expired and auto-renewal failed. You have been moved to the free plan.',
+          'alert'
+        );
+      }
     }
   } catch (error) {
     console.error('Error checking subscription status:', error);
