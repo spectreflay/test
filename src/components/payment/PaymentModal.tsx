@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { X, CreditCard, Smartphone, Check } from "lucide-react";
 import PaymentMethodCard from "../payment/PaymentMethodCard";
 import PaymentSummary from "../payment/PaymentSummary";
@@ -31,7 +31,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [countdown, setCountdown] = useState(REDIRECT_DELAY);
   const [shouldRedirect, setShouldRedirect] = useState(false);
 
-  useEffect(() => {
+  React.useEffect(() => {
     let timer: NodeJS.Timeout;
     if (currentStep === 2) {
       timer = setInterval(() => {
@@ -50,7 +50,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     };
   }, [currentStep]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (shouldRedirect) {
       onSuccess();
     }
@@ -115,9 +115,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     icon={Smartphone}
                     name="GCash"
                     description="Pay with your GCash wallet"
-                    selected={selectedMethod === "gcash"}
+                    selected={selectedMethod === "GCASH"}
                     onClick={() => {
-                      setSelectedMethod("gcash");
+                      setSelectedMethod("GCASH");
                       setCurrentStep(1);
                     }}
                   />
@@ -125,9 +125,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     icon={Smartphone}
                     name="GrabPay"
                     description="Pay with your GrabPay wallet"
-                    selected={selectedMethod === "grab_pay"}
+                    selected={selectedMethod === "GRABPAY"}
                     onClick={() => {
-                      setSelectedMethod("grab_pay");
+                      setSelectedMethod("GRABPAY");
                       setCurrentStep(1);
                     }}
                   />
@@ -135,9 +135,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     icon={Smartphone}
                     name="Maya"
                     description="Pay with your Maya wallet"
-                    selected={selectedMethod === "paymaya"}
+                    selected={selectedMethod === "PAYMAYA"}
                     onClick={() => {
-                      setSelectedMethod("paymaya");
+                      setSelectedMethod("PAYMAYA");
                       setCurrentStep(1);
                     }}
                   />
@@ -156,11 +156,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               )}
 
               {currentStep === 1 &&
-                ["gcash", "grab_pay", "paymaya"].includes(
-                  selectedMethod || ""
-                ) && (
+                ["GCASH", "GRABPAY", "PAYMAYA"].includes(selectedMethod || "") && (
                   <EWalletPayment
-                    type={selectedMethod as "gcash" | "grab_pay" | "paymaya"}
+                    type={selectedMethod as "GCASH" | "GRABPAY" | "PAYMAYA"}
                     amount={amount}
                     subscriptionId={subscriptionId}
                     billingCycle={billingCycle}

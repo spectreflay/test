@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { createSource, getSourceStatus } from '../../utils/paymongo';
+import { createInvoice, getInvoiceStatus } from '../../utils/xendit';
 import { useSubscribeMutation } from '../../store/services/subscriptionService';
 
 interface EWalletPaymentProps {
-  type: 'gcash' | 'grab_pay' | 'paymaya';
+  type: 'GCASH' | 'GRABPAY' | 'PAYMAYA';
   amount: number;
   subscriptionId: string;
   billingCycle: 'monthly' | 'yearly';
@@ -22,9 +22,9 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
   billingCycle,
   onSuccess,
   onError,
-  onBack
+  onBack,
 }) => {
-  const [sourceData, setSourceData] = useState<any>(null);
+  const [invoiceData, setInvoiceData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
   const isDevelopment = import.meta.env.MODE === 'development';
@@ -33,23 +33,23 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
   useEffect(() => {
     const initializePayment = async () => {
       try {
-        const source = await createSource(amount, type);
-        setSourceData(source);
+        const invoice = await createInvoice(amount, `Subscription Payment - ${subscriptionId}`);
+        setInvoiceData(invoice);
         
         // Start polling for payment status
         const interval = setInterval(async () => {
           try {
-            const status = await getSourceStatus(source.id);
-            if (status.attributes.status === 'chargeable') {
+            const status = await getInvoiceStatus(invoice.id);
+            if (status.status === 'PAID') {
               clearInterval(interval);
               
               // Update subscription with payment details
               await subscribe({
                 subscriptionId,
-                paymentMethod: type,
+                paymentMethod: type.toLowerCase(),
                 billingCycle,
                 paymentDetails: {
-                  paymentId: source.id,
+                  paymentId: invoice.id,
                   amount,
                   status: 'completed'
                 }
@@ -57,7 +57,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
 
               toast.success('Payment successful!');
               onSuccess();
-            } else if (status.attributes.status === 'expired' || status.attributes.status === 'cancelled') {
+            } else if (status.status === 'EXPIRED' || status.status === 'FAILED') {
               clearInterval(interval);
               onError('Payment failed or expired');
             }
@@ -69,8 +69,8 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
         setPollInterval(interval);
 
         // Open the checkout URL in a new window
-        if (source.attributes.redirect.checkout_url) {
-          window.open(source.attributes.redirect.checkout_url, '_blank');
+        if (invoice.invoice_url) {
+          window.open(invoice.invoice_url, '_blank');
         }
       } catch (error: any) {
         onError(error.message || 'Failed to initialize payment');
@@ -85,7 +85,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
         clearInterval(pollInterval);
       }
     };
-  }, [type, amount, subscriptionId, billingCycle,onSuccess, onError,subscribe]);
+  }, [type, amount, subscriptionId, billingCycle, onSuccess, onError, subscribe]);
 
   if (isLoading) {
     return (  
@@ -96,7 +96,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
     );
   }
 
-  if (!sourceData) {
+  if (!invoiceData) {
     return (
       <div className="text-center py-8">
         <p className="text-red-600">Failed to initialize payment. Please try again.</p>
@@ -113,7 +113,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-xl font-semibold capitalize">{type === 'paymaya' ? 'Maya' : type} Payment</h2>
+        <h2 className="text-xl font-semibold capitalize">{type === 'PAYMAYA' ? 'Maya' : type} Payment</h2>
       </div>
 
       {isDevelopment && (
@@ -123,7 +123,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
             <div>
               <p className="text-sm text-blue-700 font-medium">Development Mode</p>
               <p className="text-sm text-blue-600 mt-1">
-                A new window will open with PayMongo's test payment page. Complete the payment there and return to this window.
+                A new window will open with Xendit's test payment page. Complete the payment there and return to this window.
               </p>
             </div>
           </div>
@@ -133,7 +133,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
       <div className="text-center space-y-6">
         <div className="bg-gray-50 p-6 rounded-lg inline-block">
           <QRCodeSVG 
-            value={sourceData.attributes.redirect.checkout_url} 
+            value={invoiceData.invoice_url} 
             size={200} 
           />
         </div>
@@ -146,7 +146,7 @@ const EWalletPayment: React.FC<EWalletPaymentProps> = ({
         </div>
 
         <button
-          onClick={() => window.open(sourceData.attributes.redirect.checkout_url, '_blank')}
+          onClick={() => window.open(invoiceData.invoice_url, '_blank')}
           className="inline-block py-2 px-4 bg-primary text-white rounded-md hover:bg-primary-hover transition-colors"
         >
           Open Payment Page

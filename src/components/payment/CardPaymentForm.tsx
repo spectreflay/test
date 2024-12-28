@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CreditCard } from 'lucide-react';
-import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
-import { createPaymentMethod, createPaymentIntent } from '../../utils/paymongo';
+import { createCardToken, createCardCharge } from '../../utils/xendit';
 import { useSubscribeMutation } from '../../store/services/subscriptionService';
 
 interface CardPaymentFormProps {
@@ -32,79 +31,99 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [subscribe] = useSubscribeMutation();
-  const { register, handleSubmit, formState: { errors } } = useForm<CardFormData>();
+  const [formData, setFormData] = useState<CardFormData>({
+    cardNumber: '',
+    expMonth: '',
+    expYear: '',
+    cvc: '',
+    cardHolder: ''
+  });
 
-  const onSubmit = async (data: CardFormData) => {
-    console.log('Form submitted with data:', data);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    let formattedValue = value;
+
+    // Format card number with spaces
+    if (name === 'cardNumber') {
+      formattedValue = value.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim();
+    }
+    // Format expiry date
+    else if (name === 'expMonth') {
+      formattedValue = value.replace(/\D/g, '').slice(0, 2);
+    }
+    else if (name === 'expYear') {
+      formattedValue = value.replace(/\D/g, '').slice(0, 4);
+    }
+    // Format CVC
+    else if (name === 'cvc') {
+      formattedValue = value.replace(/\D/g, '').slice(0, 4);
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: formattedValue
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+
     try {
-      setIsProcessing(true);
-
-      // Create payment method
-      const paymentMethod = await createPaymentMethod({
-        type: 'card',
-        details: {
-          card_number: data.cardNumber.replace(/\s/g, ''),
-          exp_month: parseInt(data.expMonth),
-          exp_year: parseInt(data.expYear),
-          cvc: data.cvc,
-        },
-        billing: {
-          name: data.cardHolder,
-          email: 'customer@example.com' // You might want to make this dynamic
-        }
+      // Create card token
+      const cardToken = await createCardToken({
+        card_number: formData.cardNumber.replace(/\s/g, ''),
+        exp_month: parseInt(formData.expMonth),
+        exp_year: parseInt(formData.expYear),
+        cvc: formData.cvc
       });
 
-      console.log('Payment method created:', paymentMethod);
-
-      // Create payment intent
-      const paymentIntent = await createPaymentIntent({
+      // Create charge
+      const charge = await createCardCharge(
+        cardToken.id,
         amount,
-        paymentMethodAllowed: ['card'],
-        paymentMethodId: paymentMethod.id,
-        description: 'Subscription Payment',
-        currency: 'PHP'
-      });
+        `Subscription Payment - ${subscriptionId}`
+      );
 
-      console.log('Payment intent created:', paymentIntent);
+      if (charge.status === 'CAPTURED') {
+        // Store card details for auto-renewal (excluding CVC)
+        const cardDetails = {
+          cardNumber: formData.cardNumber.slice(-4),
+          expMonth: parseInt(formData.expMonth),
+          expYear: parseInt(formData.expYear),
+          cardHolder: formData.cardHolder
+        };
 
-      // Store card details for auto-renewal (excluding CVC)
-      const cardDetails = {
-        cardNumber: data.cardNumber.slice(-4), // Only store last 4 digits
-        expMonth: parseInt(data.expMonth),
-        expYear: parseInt(data.expYear),
-        cardHolder: data.cardHolder
-      };
+        // Update subscription with payment details
+        await subscribe({
+          subscriptionId,
+          paymentMethod: 'card',
+          billingCycle,
+          autoRenew: true,
+          paymentDetails: {
+            paymentId: charge.id,
+            amount,
+            status: 'completed',
+            cardDetails
+          }
+        }).unwrap();
 
-      console.log('Card details to be stored:', cardDetails);
-
-      // Update subscription with payment and card details
-      const subscriptionResult = await subscribe({
-        subscriptionId,
-        paymentMethod: 'card',
-        billingCycle,
-        autoRenew: true, // Enable auto-renewal by default for card payments
-        paymentDetails: {
-          paymentId: paymentIntent.id,
-          amount,
-          status: 'completed',
-          cardDetails // Include card details for future auto-renewal
-        }
-      }).unwrap();
-
-      console.log('Subscription updated:', subscriptionResult);
-
-      toast.success('Payment successful!');
-      onSuccess();
+        toast.success('Payment successful!');
+        onSuccess();
+      } else {
+        throw new Error('Payment failed');
+      }
     } catch (error: any) {
       console.error('Payment error:', error);
       onError(error.message || 'Payment failed');
+      toast.error('Payment failed. Please try again.');
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="flex items-center gap-4 mb-6">
         <button
           type="button"
@@ -125,12 +144,12 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
           </label>
           <input
             type="text"
-            {...register('cardHolder', { required: 'Card holder name is required' })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+            name="cardHolder"
+            value={formData.cardHolder}
+            onChange={handleInputChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            required
           />
-          {errors.cardHolder && (
-            <p className="mt-1 text-sm text-red-600">{errors.cardHolder.message}</p>
-          )}
         </div>
 
         <div>
@@ -143,20 +162,15 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
             </div>
             <input
               type="text"
-              {...register('cardNumber', {
-                required: 'Card number is required',
-                pattern: {
-                  value: /^[\d\s]{16,19}$/,
-                  message: 'Invalid card number'
-                }
-              })}
-              className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-              placeholder="4343 4343 4343 4343"
+              name="cardNumber"
+              value={formData.cardNumber}
+              onChange={handleInputChange}
+              className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              placeholder="4111 1111 1111 1111"
+              maxLength={19}
+              required
             />
           </div>
-          {errors.cardNumber && (
-            <p className="mt-1 text-sm text-red-600">{errors.cardNumber.message}</p>
-          )}
         </div>
 
         <div className="grid grid-cols-3 gap-4">
@@ -166,19 +180,13 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
             </label>
             <input
               type="text"
-              {...register('expMonth', {
-                required: 'Required',
-                pattern: {
-                  value: /^(0[1-9]|1[0-2])$/,
-                  message: 'Invalid month'
-                }
-              })}
+              name="expMonth"
+              value={formData.expMonth}
+              onChange={handleInputChange}
               placeholder="MM"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
             />
-            {errors.expMonth && (
-              <p className="mt-1 text-sm text-red-600">{errors.expMonth.message}</p>
-            )}
           </div>
 
           <div>
@@ -187,19 +195,13 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
             </label>
             <input
               type="text"
-              {...register('expYear', {
-                required: 'Required',
-                pattern: {
-                  value: /^20[2-9][0-9]$/,
-                  message: 'Invalid year'
-                }
-              })}
+              name="expYear"
+              value={formData.expYear}
+              onChange={handleInputChange}
               placeholder="YYYY"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
             />
-            {errors.expYear && (
-              <p className="mt-1 text-sm text-red-600">{errors.expYear.message}</p>
-            )}
           </div>
 
           <div>
@@ -208,19 +210,13 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
             </label>
             <input
               type="text"
-              {...register('cvc', {
-                required: 'Required',
-                pattern: {
-                  value: /^\d{3,4}$/,
-                  message: 'Invalid CVC'
-                }
-              })}
+              name="cvc"
+              value={formData.cvc}
+              onChange={handleInputChange}
               placeholder="123"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
             />
-            {errors.cvc && (
-              <p className="mt-1 text-sm text-red-600">{errors.cvc.message}</p>
-            )}
           </div>
         </div>
       </div>
@@ -237,4 +233,3 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
 };
 
 export default CardPaymentForm;
-
