@@ -19,40 +19,35 @@ const handleXenditError = (error: any) => {
   throw new Error(errorMessage || "Payment processing failed");
 };
 
-// Create invoice for initial payment
-export const createInvoice = async (
+// Create a token for the card first
+export const createCardToken = async (cardData: {
+  card_number: string;
+  exp_month: number;
+  exp_year: number;
+  cvc: string;
+}) => {
+  try {
+    const response = await xenditAxios.post("/v2/card_tokens", cardData);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+// Create a charge using the token
+export const createCardCharge = async (
+  tokenId: string,
   amount: number,
-  description: string,
-  customerId?: string
+  description: string
 ) => {
   try {
-    const response = await xenditAxios.post("/v2/invoices", {
-      external_id: `inv-${Date.now()}`,
+    const response = await xenditAxios.post("/credit_card_charges", {
+      token_id: tokenId,
+      external_id: `charge-${Date.now()}`,
       amount,
-      description,
       currency: "PHP",
-      payment_methods: ["GCASH", "GRABPAY", "PAYMAYA", "CREDIT_CARD"],
-      success_redirect_url: `${window.location.origin}/subscription?status=success&payment_id={id}`,
-      failure_redirect_url: `${window.location.origin}/subscription?status=failed`,
-      invoice_duration: 86400, // 24 hours
-      should_send_email: true,
-      reminder_time: 1, // Send reminder after 1 hour
-      customer_id: customerId,
-      items: [
-        {
-          name: description,
-          quantity: 1,
-          price: amount,
-          category: "Subscription",
-        },
-      ],
-      customer: IS_DEVELOPMENT
-        ? {
-            email: "test@example.com",
-            given_names: "Test",
-            surname: "User",
-          }
-        : undefined,
+      capture: true,
+      description,
     });
     return response.data;
   } catch (error) {
@@ -108,6 +103,28 @@ export const createSubscriptionPlan = async (
   }
 };
 
+// Create a payment method
+export const createPaymentMethod = async (
+  customerId: string,
+  tokenId: string,
+  cardInfo: any
+) => {
+  try {
+    const response = await xenditAxios.post("/payment_methods", {
+      type: "CARD",
+      customer_id: customerId,
+      reference_id: `pm-${Date.now()}`,
+      card: {
+        token_id: tokenId,
+        ...cardInfo
+      }
+    });
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
 // Create a subscription for a customer
 export const createSubscription = async (
   planId: string,
@@ -151,7 +168,7 @@ export const getSubscriptionStatus = async (subscriptionId: string) => {
   }
 };
 
-// Get invoice status and payment method
+// Get invoice status
 export const getInvoiceStatus = async (invoiceId: string) => {
   try {
     const response = await xenditAxios.get(`/v2/invoices/${invoiceId}`);
@@ -161,109 +178,29 @@ export const getInvoiceStatus = async (invoiceId: string) => {
   }
 };
 
-// Get credit card charge details
-export const getCreditCardChargeDetails = async (chargeId: string) => {
-  try {
-    const response = await xenditAxios.get(`/credit_card_charges/${chargeId}`);
-    console.log('Credit card charge details:', JSON.stringify(response.data, null, 2));
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching credit card charge details:', error);
-    handleXenditError(error);
-  }
-};
-
-// Create payment method from successful invoice
-export const createPaymentMethodFromInvoice = async (
-  invoiceId: string,
-  customerId: string
+// Create e-wallet charge
+export const createEWalletCharge = async (
+  ewalletType: 'GCASH' | 'GRABPAY' | 'PAYMAYA',
+  amount: number,
+  description: string
 ) => {
   try {
-    const invoice = await getInvoiceStatus(invoiceId);
-    console.log('Invoice details:', JSON.stringify(invoice, null, 2));
-    
-    if (invoice.status !== "PAID") {
-      throw new Error("Invoice must be paid to create payment method");
-    }
-
-    // For credit card payments
-    if (invoice.payment_method === "CREDIT_CARD") {
-      if (!invoice.credit_card_charge_id) {
-        throw new Error("Credit card charge ID not found in invoice");
+    const response = await xenditAxios.post("/ewallets/charges", {
+      reference_id: `ewallet-${Date.now()}`,
+      currency: "PHP",
+      amount: amount,
+      checkout_method: "ONE_TIME_PAYMENT",
+      channel_code: ewalletType,
+      channel_properties: {
+        success_redirect_url: `${window.location.origin}/subscription?status=success`,
+        failure_redirect_url: `${window.location.origin}/subscription?status=failed`,
+      },
+      metadata: {
+        description: description
       }
-
-      const chargeDetails = await getCreditCardChargeDetails(invoice.credit_card_charge_id);
-
-      // Log the charge details for debugging
-      console.log('Charge details:', JSON.stringify(chargeDetails, null, 2));
-
-      // Check if the charge_type is SINGLE_USE_TOKEN
-      if (chargeDetails.charge_type === "SINGLE_USE_TOKEN") {
-        console.warn("Warning: This charge used a SINGLE_USE_TOKEN, which may not be suitable for recurring payments.");
-      }
-
-      const cardInfo = {
-        card_number: chargeDetails.masked_card_number.replace(/X/g, '*'),
-        card_type: chargeDetails.card_type,
-        currency: chargeDetails.currency,
-        card_information: {
-          network: chargeDetails.card_brand,
-          country: chargeDetails.country_code,
-          issuer: chargeDetails.card_issuing_bank,
-          type: chargeDetails.card_type,
-        },
-      };
-
-      // Add expiry month and year only if they are available
-      if (chargeDetails.card_expiration_month) {
-        cardInfo.expiry_month = chargeDetails.card_expiration_month.toString().padStart(2, '0');
-      }
-      if (chargeDetails.card_expiration_year) {
-        cardInfo.expiry_year = chargeDetails.card_expiration_year.toString();
-      }
-
-      // Log the card information we're about to send
-      console.log('Card information being sent:', JSON.stringify(cardInfo, null, 2));
-
-      const response = await xenditAxios.post("/v2/payment_methods", {
-        type: "CARD",
-        customer_id: customerId,
-        reference_id: `pm-${Date.now()}`,
-        card: cardInfo,
-        metadata: {
-          invoice_id: invoiceId,
-          charge_id: chargeDetails.id,
-        }
-      });
-      
-      console.log('Payment method created:', JSON.stringify(response.data, null, 2));
-      return response.data;
-    }
-
-    // For e-wallets (unchanged)
-    if (invoice.payment_method === "EWALLET") {
-      const response = await xenditAxios.post("/v2/payment_methods", {
-        type: "EWALLET",
-        ewallet: {
-          channel_code: invoice.payment_channel,
-          channel_properties: {
-            success_return_url: invoice.success_redirect_url,
-            failure_return_url: invoice.failure_redirect_url
-          }
-        },
-        customer_id: customerId,
-        reference_id: `pm-${Date.now()}`,
-        metadata: {
-          invoice_id: invoiceId
-        }
-      });
-      console.log('Payment method created:', response.data);
-      return response.data;
-    }
-
-    throw new Error(`Unsupported payment method: ${invoice.payment_method}`);
+    });
+    return response.data;
   } catch (error) {
-    console.error('Error creating payment method:', error);
     handleXenditError(error);
   }
 };
@@ -304,7 +241,8 @@ export const stopSubscription = async (subscriptionId: string) => {
   }
 };
 
-export const getPaymentMethods = async (customerId:string) => {
+// Get payment methods for a customer
+export const getPaymentMethods = async (customerId: string) => {
   try {
     const response = await xenditAxios.get(`/payment_methods`, {
       params: { customer_id: customerId }
@@ -314,4 +252,3 @@ export const getPaymentMethods = async (customerId:string) => {
     handleXenditError(error);
   }
 };
-
