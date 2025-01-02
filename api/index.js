@@ -15,6 +15,7 @@ import staffRoutes from "../backend/routes/staffRoutes.js";
 import notificationRoutes from "../backend/routes/notificationRoutes.js";
 import userRoutes from "../backend/routes/userRoutes.js";
 import subscriptionRoutes from "../backend/routes/subscriptionRoutes.js";
+import xenditRoutes from "../backend/routes/xenditRoutes.js";
 import testRoutes from "../backend/routes/testRoute.js";
 
 dotenv.config();
@@ -55,6 +56,8 @@ app.use("/api/staff", staffRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/xendit", xenditRoutes);
+
 app.use("/api/test", testRoutes);
 
 app.use((err, req, res, next) => {
