@@ -1,20 +1,26 @@
-import React, { useState } from "react";
-import { X, CreditCard, AlertCircle } from "lucide-react";
-import PaymentSummary from "./PaymentSummary";
-import { createInvoice, getInvoiceStatus } from "../../utils/xendit";
-import { useSubscribeMutation } from "../../store/services/subscriptionService";
-import { toast } from "react-hot-toast";
+import React, { useState, useEffect } from "react"
+import { X, CreditCard, AlertCircle } from "lucide-react"
+import PaymentSummary from "./PaymentSummary"
+import {
+  createInvoice,
+  getInvoiceStatus,
+  createCustomer,
+  createSubscriptionPlan,
+  getSubscriptionPlanStatus,
+} from "../../utils/xendit"
+import { useSubscribeMutation } from "../../store/services/subscriptionService"
+import { toast } from "react-hot-toast"
 
 interface PaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  subscriptionId: string;
-  amount: number;
-  billingCycle: 'monthly' | 'yearly';
-  onSuccess: () => void;
+  isOpen: boolean
+  onClose: () => void
+  subscriptionId: string
+  amount: number
+  billingCycle: "monthly" | "yearly"
+  onSuccess: () => void
 }
 
-const STEPS = ["Summary", "Payment", "Confirmation"];
+const STEPS = ["Summary", "Payment", "Confirmation"]
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -24,83 +30,133 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   billingCycle,
   onSuccess,
 }) => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [subscribe] = useSubscribeMutation();
-  const isDevelopment = import.meta.env.MODE === 'development';
+  const [currentStep, setCurrentStep] = useState(0)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [subscribe] = useSubscribeMutation()
+  const [customerId, setCustomerId] = useState<string | null>(null)
+  const [planId, setPlanId] = useState<string | null>(null)
+  const isDevelopment = import.meta.env.MODE === "development"
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout
+    if (planId) {
+      intervalId = setInterval(async () => {
+        const planStatus = await getSubscriptionPlanStatus(planId)
+        if (planStatus.status === "ACTIVE") {
+          clearInterval(intervalId)
+          setCurrentStep(2)
+          toast.success("Subscription plan activated successfully!")
+        }
+      }, 5000) // Check every 5 seconds
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [planId])
 
   const handleInitiatePayment = async () => {
     try {
-      setIsProcessing(true);
-      
+      setIsProcessing(true)
+
       // Create Xendit invoice
-      const invoice = await createInvoice(
-        amount,
-        `Subscription Payment - ${subscriptionId}`
-      );
+      const invoice = await createInvoice(amount, `Subscription Payment - ${subscriptionId}`)
 
       // Open Xendit payment page in a new window
-      const paymentWindow = window.open(invoice.invoice_url, 'xenditPayment', 'width=600,height=600');
+      const paymentWindow = window.open(invoice.invoice_url, "xenditPayment", "width=600,height=600")
 
       // Start polling for payment status
       const pollInterval = setInterval(async () => {
         try {
-          const status = await getInvoiceStatus(invoice.id);
-          
-          if (status.status === 'PAID') {
-            clearInterval(pollInterval);
+          const status = await getInvoiceStatus(invoice.id)
+
+          if (status.status === "PAID") {
+            clearInterval(pollInterval)
             if (paymentWindow) {
-              paymentWindow.close();
+              paymentWindow.close()
             }
 
-            // Update subscription with payment details
-            await subscribe({
-              subscriptionId,
-              paymentMethod: status.payment_method,
-              billingCycle,
-              paymentDetails: {
-                paymentId: invoice.id,
-                amount,
-                status: 'completed'
-              }
-            }).unwrap();
-
-            setCurrentStep(2); // Move to confirmation step
-            toast.success('Payment successful!');
-          } else if (status.status === 'EXPIRED') {
-            clearInterval(pollInterval);
+            // Create customer and subscription after successful payment
+            await handleSuccessfulPayment(status)
+          } else if (status.status === "EXPIRED") {
+            clearInterval(pollInterval)
             if (paymentWindow) {
-              paymentWindow.close();
+              paymentWindow.close()
             }
-            toast.error('Payment session expired');
-            setIsProcessing(false);
+            toast.error("Payment session expired")
+            setIsProcessing(false)
           }
         } catch (error) {
-          console.error('Error checking payment status:', error);
+          console.error("Error checking payment status:", error)
         }
-      }, 3000); // Check every 3 seconds
+      }, 3000) // Check every 3 seconds
 
       // Cleanup interval if modal is closed
-      return () => clearInterval(pollInterval);
-
+      return () => clearInterval(pollInterval)
     } catch (error) {
-      console.error('Payment error:', error);
-      toast.error('Failed to initiate payment');
-      setIsProcessing(false);
+      console.error("Payment error:", error)
+      toast.error("Failed to initiate payment")
+      setIsProcessing(false)
     }
-  };
+  }
 
-  if (!isOpen) return null;
+  const handleSuccessfulPayment = async (status: any) => {
+    try {
+      // Create customer
+      const customer = await createCustomer(
+        `${subscriptionId} Customer`,
+        "customer@example.com", // You should get this from user input
+      )
+
+      // Create subscription plan without payment_method_id
+      const plan = await createSubscriptionPlan(
+        customer.id,
+        amount,
+        billingCycle === "monthly" ? "MONTH" : "YEAR",
+        1,
+        `${subscriptionId} Plan`,
+        12, // You might want to make this configurable
+      )
+
+      setPlanId(plan.id)
+
+      // Update subscription with payment details
+      await subscribe({
+        subscriptionId,
+        paymentMethod: status.payment_method,
+        billingCycle,
+        paymentDetails: {
+          paymentId: status.id,
+          amount,
+          status: "completed",
+        },
+      }).unwrap()
+
+      setCustomerId(customer.id)
+      toast.success("Payment successful! Waiting for plan activation...")
+    } catch (error) {
+      console.error("Error setting up subscription:", error)
+      toast.error("Payment successful, but failed to set up subscription. Please contact support.")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const getPaymentMethodIdFromPayment = async (paymentId: string) => {
+    // This function would need to be implemented
+    // It should make an API call to Xendit to get the payment details
+    // and extract the payment method ID
+    // For now, we'll return a placeholder
+    return "pm_" + paymentId
+  }
+
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold">Complete Payment</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -110,23 +166,21 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           {STEPS.map((step, index) => (
             <React.Fragment key={step}>
               {index > 0 && (
-                <div className={`h-1 w-16 mx-2 self-center ${
-                  index <= currentStep ? 'bg-primary' : 'bg-gray-200'
-                }`} />
+                <div className={`h-1 w-16 mx-2 self-center ${index <= currentStep ? "bg-primary" : "bg-gray-200"}`} />
               )}
               <div className="flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  index < currentStep
-                    ? 'bg-primary text-white'
-                    : index === currentStep
-                    ? 'bg-primary/10 text-primary border-2 border-primary'
-                    : 'bg-gray-100 text-gray-400'
-                }`}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    index < currentStep
+                      ? "bg-primary text-white"
+                      : index === currentStep
+                        ? "bg-primary/10 text-primary border-2 border-primary"
+                        : "bg-gray-100 text-gray-400"
+                  }`}
+                >
                   {index + 1}
                 </div>
-                <span className={`text-sm mt-2 ${
-                  index <= currentStep ? 'text-primary' : 'text-gray-400'
-                }`}>
+                <span className={`text-sm mt-2 ${index <= currentStep ? "text-primary" : "text-gray-400"}`}>
                   {step}
                 </span>
               </div>
@@ -138,11 +192,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           <div>
             {currentStep === 0 && (
               <div className="space-y-6">
-                <PaymentSummary
-                  planName={subscriptionId}
-                  amount={amount}
-                  billingCycle={billingCycle}
-                />
+                <PaymentSummary planName={subscriptionId} amount={amount} billingCycle={billingCycle} />
                 <button
                   onClick={() => setCurrentStep(1)}
                   className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover"
@@ -161,13 +211,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       <div>
                         <p className="text-sm text-blue-700 font-medium">Development Mode</p>
                         <p className="text-sm text-blue-600 mt-1">
-                          You will be redirected to Xendit's test payment page. Use test card details or test e-wallet credentials.
+                          You will be redirected to Xendit's test payment page. Use test card details or test e-wallet
+                          credentials.
                         </p>
                       </div>
                     </div>
                   </div>
                 )}
-                
+
                 <div className="text-center space-y-4">
                   <CreditCard className="h-12 w-12 text-primary mx-auto" />
                   <p className="text-gray-600">
@@ -178,7 +229,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     disabled={isProcessing}
                     className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
                   >
-                    {isProcessing ? 'Processing...' : 'Proceed to Payment'}
+                    {isProcessing ? "Processing..." : "Proceed to Payment"}
                   </button>
                 </div>
               </div>
@@ -188,28 +239,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               <div className="text-center space-y-6">
                 <div className="flex items-center justify-center">
                   <div className="bg-green-100 rounded-full p-4">
-                    <svg
-                      className="h-12 w-12 text-green-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
+                    <svg className="h-12 w-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
-                    Payment Successful!
-                  </h3>
+                  <h3 className="text-xl font-semibold text-gray-900">Payment Successful!</h3>
                   <p className="mt-2 text-gray-600">
                     Thank you for your subscription. Your payment has been processed successfully.
                   </p>
+                  <p className="mt-2 text-gray-600">Your customer ID is: {customerId}</p>
                 </div>
                 <button
                   onClick={onSuccess}
@@ -222,16 +262,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
 
           <div className="hidden md:block">
-            <PaymentSummary
-              planName={subscriptionId}
-              amount={amount}
-              billingCycle={billingCycle}
-            />
+            <PaymentSummary planName={subscriptionId} amount={amount} billingCycle={billingCycle} />
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default PaymentModal;
+export default PaymentModal
+
