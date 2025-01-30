@@ -14,6 +14,7 @@ import {
   generateResetToken,
   verifyResetToken,
 } from "../utils/generateTokenLinkUtils.js";
+import { createXenditCustomer } from "../utils/xendit.js";
 
 const router = express.Router();
 
@@ -31,12 +32,14 @@ router.post("/register", async (req, res) => {
     if (userExists) {
       return res.status(400).json({ message: "User already exists" });
     }
+    const xenditCustomer = await createXenditCustomer(name, email);
 
     const user = await User.create({
       name,
       email,
       password,
       isEmailVerified: false,
+      xenditCustomerId: xenditCustomer.id,
     });
 
     // Generate verification token and send email
@@ -51,6 +54,7 @@ router.post("/register", async (req, res) => {
         email: user.email,
         token: generateToken(user._id),
         isEmailVerified: false,
+        xenditCustomerId: xenditCustomer.id,
       });
     }
   } catch (error) {
@@ -197,6 +201,7 @@ router.post("/login", async (req, res) => {
         name: user.name,
         email: user.email,
         token: generateToken(user._id),
+        xenditCustomerId: user.xenditCustomerId,
         themePreference: user.themePreference,
         isEmailVerified: user.isEmailVerified || false,
       });

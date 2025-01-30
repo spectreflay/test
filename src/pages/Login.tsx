@@ -38,6 +38,8 @@ const Login = () => {
     if (token && user?.isEmailVerified) {
       navigate("/stores");
     }
+
+    console.log(user);
   }, [token, user?.isEmailVerified, navigate]);
 
   const onSubmit = async (data: LoginForm) => {

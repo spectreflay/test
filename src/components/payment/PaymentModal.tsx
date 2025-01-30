@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { X, CreditCard, AlertCircle } from "lucide-react";
 import PaymentSummary from "./PaymentSummary";
-import { createInvoice, getInvoiceStatus } from "../../utils/xendit";
+import {createSubscription, getSubscriptionStatus } from "../../utils/xendit";
 import { useSubscribeMutation } from "../../store/services/subscriptionService";
 import { toast } from "react-hot-toast";
+import { useSelector } from "react-redux";
+import { RootState } from "../../store";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -28,67 +30,86 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [subscribe] = useSubscribeMutation();
   const isDevelopment = import.meta.env.MODE === 'development';
+  const { user } = useSelector((state: RootState) => state.auth);
 
-  const handleInitiatePayment = async () => {
-    try {
-      setIsProcessing(true);
-      
-      // Create Xendit invoice
-      const invoice = await createInvoice(
-        amount,
-        `Subscription Payment - ${subscriptionId}`
-      );
+  // In src/components/payment/PaymentModal.tsx
 
-      // Open Xendit payment page in a new window
-      const paymentWindow = window.open(invoice.invoice_url, 'xenditPayment', 'width=600,height=600');
+const handleInitiatePayment = async () => {
+  try {
+    setIsProcessing(true);
 
-      // Start polling for payment status
-      const pollInterval = setInterval(async () => {
-        try {
-          const status = await getInvoiceStatus(invoice.id);
-          
-          if (status.status === 'PAID') {
-            clearInterval(pollInterval);
-            if (paymentWindow) {
-              paymentWindow.close();
-            }
-
-            // Update subscription with payment details
-            await subscribe({
-              subscriptionId,
-              paymentMethod: status.payment_method,
-              billingCycle,
-              paymentDetails: {
-                paymentId: invoice.id,
-                amount,
-                status: 'completed'
-              }
-            }).unwrap();
-
-            setCurrentStep(2); // Move to confirmation step
-            toast.success('Payment successful!');
-          } else if (status.status === 'EXPIRED') {
-            clearInterval(pollInterval);
-            if (paymentWindow) {
-              paymentWindow.close();
-            }
-            toast.error('Payment session expired');
-            setIsProcessing(false);
-          }
-        } catch (error) {
-          console.error('Error checking payment status:', error);
-        }
-      }, 3000); // Check every 3 seconds
-
-      // Cleanup interval if modal is closed
-      return () => clearInterval(pollInterval);
-
-    } catch (error) {
-      console.error('Payment error:', error);
-      toast.error('Failed to initiate payment');
-      setIsProcessing(false);
+    if (!user?.xenditCustomerId) {
+      throw new Error('Customer ID not found');
     }
-  };
+    
+    // Create subscription
+    const subscription = await createSubscription(
+      `sub-${Date.now()}`,
+      user.xenditCustomerId,
+      amount
+    );
+
+    if (!subscription.linkingUrl) {
+      throw new Error('No payment linking URL provided');
+    }
+
+    // Open payment window
+    const paymentWindow = window.open(subscription.linkingUrl, 'xenditPayment', 'width=600,height=600');
+
+    // Start polling for subscription status
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await getSubscriptionStatus(subscription.id);
+        
+        if (status.status === 'ACTIVE') {
+          clearInterval(pollInterval);
+          if (paymentWindow) {
+            paymentWindow.close();
+          }
+
+          // Update subscription with payment details
+          await subscribe({
+            subscriptionId,
+            paymentMethod: 'card', // or the actual payment method from status
+            billingCycle,
+            paymentDetails: {
+              paymentId: subscription.id,
+              amount,
+              status: 'completed',
+              xenditSubscriptionId: subscription.id
+            }
+          }).unwrap();
+
+          setCurrentStep(2); // Move to confirmation step
+          toast.success('Subscription activated successfully!');
+        } else if (status.status === 'FAILED' || status.status === 'EXPIRED') {
+          clearInterval(pollInterval);
+          if (paymentWindow) {
+            paymentWindow.close();
+          }
+          toast.error('Payment failed or expired');
+          setIsProcessing(false);
+        }
+      } catch (error) {
+        console.error('Error checking subscription status:', error);
+      }
+    }, 3000); // Check every 3 seconds
+
+    // Cleanup interval if modal is closed
+    return () => {
+      clearInterval(pollInterval);
+      if (paymentWindow && !paymentWindow.closed) {
+        paymentWindow.close();
+      }
+    };
+
+  } catch (error) {
+    console.error('Payment error:', error);
+    toast.error('Failed to initiate payment');
+    setIsProcessing(false);
+  }
+};
+
 
   if (!isOpen) return null;
 

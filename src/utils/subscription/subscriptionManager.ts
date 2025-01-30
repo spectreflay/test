@@ -3,7 +3,7 @@ import { store } from '../../store';
 import { subscriptionApi } from '../../store/services/subscriptionService';
 import { createNotification } from '../notification';
 import { SUBSCRIPTION_FEATURES } from './subscriptionFeatures';
-import { createCustomer, createSubscriptionPlan, createSubscription, getSubscriptionStatus } from '../xendit';
+import { createCustomer, createSubscription, getSubscriptionStatus } from '../xendit';
 
 class SubscriptionManager {
   private static instance: SubscriptionManager;

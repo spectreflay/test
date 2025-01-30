@@ -9,6 +9,7 @@ interface User {
   email: string;
   themePreference?: "light" | "dark" | "green" | "indigo";
   isEmailVerified: boolean;
+  xenditCustomerId: string;
 }
 
 interface AuthState {
