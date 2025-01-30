@@ -1,5 +1,4 @@
 import express from 'express';
-import crypto from 'crypto';
 import UserSubscription from '../models/userSubscriptionModel.js';
 // import { createNotification } from '../../src/utils/notification.js';
 
@@ -10,16 +9,17 @@ const verifyXenditSignature = (req) => {
   const xenditSignature = req.headers['x-callback-token'];
   const webhookSecret = process.env.XENDIT_WEBHOOK_SECRET;
 
+  // Log headers and secret for debugging
+  console.log('Received Headers:', req.headers);
+  console.log('Webhook Secret:', webhookSecret);
+
   if (!xenditSignature || !webhookSecret) {
+    console.log('Missing signature or secret');
     return false;
   }
 
-  const computedSignature = crypto
-    .createHmac('sha256', webhookSecret)
-    .update(JSON.stringify(req.body))
-    .digest('hex');
-
-  return xenditSignature === computedSignature;
+  // For Xendit recurring payments, the signature is simply compared with the webhook secret
+  return xenditSignature === webhookSecret;
 };
 
 // Handle subscription events from Xendit
@@ -59,7 +59,7 @@ router.post('/xendit', async (req, res) => {
 // Handle subscription activated event
 const handleSubscriptionActivated = async (data) => {
   const subscription = await UserSubscription.findOne({
-    'paymentDetails.xenditSubscriptionId': data.id
+    'xenditSubscriptionId': data.id
   }).populate('user');
 
   if (!subscription) {
@@ -82,7 +82,7 @@ const handleSubscriptionActivated = async (data) => {
 // Handle subscription expired event
 const handleSubscriptionExpired = async (data) => {
   const subscription = await UserSubscription.findOne({
-    'paymentDetails.xenditSubscriptionId': data.id
+    'xenditSubscriptionId': data.id
   }).populate('user');
 
   if (!subscription) {
@@ -105,7 +105,7 @@ const handleSubscriptionExpired = async (data) => {
 // Handle subscription failed event
 const handleSubscriptionFailed = async (data) => {
   const subscription = await UserSubscription.findOne({
-    'paymentDetails.xenditSubscriptionId': data.id
+    'xenditSubscriptionId': data.id
   }).populate('user');
 
   if (!subscription) {
@@ -123,7 +123,7 @@ const handleSubscriptionFailed = async (data) => {
 // Handle subscription cancelled event
 const handleSubscriptionCancelled = async (data) => {
   const subscription = await UserSubscription.findOne({
-    'paymentDetails.xenditSubscriptionId': data.id
+    'xenditSubscriptionId': data.id
   }).populate('user');
 
   if (!subscription) {

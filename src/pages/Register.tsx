@@ -42,9 +42,6 @@ const Register = () => {
       // First set the credentials to ensure we have the token
       dispatch(setCredentials(user));
 
-      // Then create the notification
-      await createNotification(dispatch, getWelcomeMessage(user.name));
-
       // Show success message and redirect to verification page
       toast.success(
         "Registration successful! Please check your email for verification."

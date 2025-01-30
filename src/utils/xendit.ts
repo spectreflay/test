@@ -44,7 +44,8 @@ export const createCustomer = async (
 export const createSubscription = async (
   referenceId: string,
   customerId: string,
-  amount: number
+  amount: number,
+  billingCycle: string
 ) => {
   try {
     const response = await xenditAxios.post("/recurring/plans", {
@@ -56,10 +57,9 @@ export const createSubscription = async (
       payment_methods: [], // Required for linking UI
       schedule: {
         reference_id: referenceId,
-        interval: "MONTH",
+        interval: billingCycle == "monthly" ? "MONTH" : "YEAR",
         interval_count: 1,
         total_recurrence: 12,
-        anchor_date: "2022-02-15T16:23:52Z",
         retry_interval: "DAY",
         retry_interval_count: 3,
         total_retry: 2,
@@ -77,7 +77,7 @@ export const createSubscription = async (
           net_unit_amount: amount,
           quantity: 1,
           url: "https://www.xendit.co/",
-          category: "Gaming",
+          category: "IT Solution",
           subcategory: "Open World",
         },
       ],
@@ -89,6 +89,7 @@ export const createSubscription = async (
     const linkingAction = response.data.actions?.find(
       (action:any) => action.action === "AUTH"
     );
+    
     const linkingUrl = linkingAction?.url || null;
 
     return { ...response.data, linkingUrl };
@@ -100,6 +101,15 @@ export const createSubscription = async (
 
 // Get subscription status
 export const getSubscriptionStatus = async (subscriptionId: string) => {
+  try {
+    const response = await xenditAxios.get(`/recurring/plans/${subscriptionId}`);
+    return response.data;
+  } catch (error) {
+    handleXenditError(error);
+  }
+};
+
+export const cancelSubscription = async (subscriptionId: string) => {
   try {
     const response = await xenditAxios.get(`/recurring/plans/${subscriptionId}`);
     return response.data;

@@ -36,7 +36,7 @@ const subscriptionHistorySchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay','CREDIT_CARD'],
+    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay','CREDIT_CARD','CARD','DIRECT_DEBIT','EWALLET'],
     required: true
   },
   paymentDetails: {

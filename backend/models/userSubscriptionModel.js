@@ -1,27 +1,5 @@
 import mongoose from 'mongoose';
 
-const cardDetailsSchema = new mongoose.Schema({
-  cardNumber: {
-    type: String,
-    required: true,
-    // Store only last 4 digits for reference
-    set: (number) => number.slice(-4),
-  },
-  expMonth: {
-    type: Number,
-    required: true,
-  },
-  expYear: {
-    type: Number,
-    required: true,
-  },
-  cardHolder: {
-    type: String,
-    required: true,
-  },
-});
-
-
 const userSubscriptionSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -32,6 +10,9 @@ const userSubscriptionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subscription',
     required: true
+  },
+  xenditSubscriptionId:{
+    type: String,
   },
   status: {
     type: String,
@@ -58,14 +39,8 @@ const userSubscriptionSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay','CREDIT_CARD']
+    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay','CREDIT_CARD','CARD','DIRECT_DEBIT','EWALLET']
   },
-  paymentDetails: {
-    paymentId: String,
-    amount: Number,
-    status: String,
-    cardDetails: cardDetailsSchema
-  }
 }, {
   timestamps: true
 });

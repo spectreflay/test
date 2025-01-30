@@ -1,19 +1,5 @@
 import { api } from "../api";
 
-export interface CardDetails {
-  cardNumber: string;
-  expMonth: number;
-  expYear: number;
-  cvc?: string; // Optional since we don't store this
-  cardHolder: string;
-}
-
-export interface PaymentDetails {
-  paymentId?: string;
-  amount?: number;
-  status?: string;
-  cardDetails?: Omit<CardDetails, "cvc">; // Never store CVC
-}
 
 export interface Subscription {
   _id: string;
@@ -32,13 +18,13 @@ export interface UserSubscription {
   _id: string;
   user: string;
   subscription: Subscription;
+  xenditSubscriptionId: string;
   status: "active" | "cancelled" | "expired";
   startDate: string;
   endDate: string;
   autoRenew: boolean;
   billingCycle: "monthly" | "yearly";
   paymentMethod: string;
-  paymentDetails?: PaymentDetails;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,30 +40,15 @@ export interface SubscriptionHistory {
   endDate: string;
   autoRenew: boolean;
   paymentMethod: string;
-  paymentDetails?: {
-    paymentId?: string;
-    amount?: number;
-    status?: string;
-  };
   createdAt: string;
 }
 
 export interface SubscribeRequest {
   subscriptionId: string;
+  xenditSubscriptionId: string;
   paymentMethod: string;
   billingCycle: "monthly" | "yearly";
   autoRenew?: boolean;
-  paymentDetails: {
-    paymentId: string;
-    amount: number;
-    status: string;
-    cardDetails?: {
-      cardNumber: string;
-      expMonth: number;
-      expYear: number;
-      cardHolder: string;
-    };
-  };
 }
 
 export const subscriptionApi = api.injectEndpoints({

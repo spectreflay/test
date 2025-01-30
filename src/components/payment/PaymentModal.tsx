@@ -46,7 +46,8 @@ const handleInitiatePayment = async () => {
     const subscription = await createSubscription(
       `sub-${Date.now()}`,
       user.xenditCustomerId,
-      amount
+      amount,
+      billingCycle
     );
 
     if (!subscription.linkingUrl) {
@@ -66,18 +67,12 @@ const handleInitiatePayment = async () => {
           if (paymentWindow) {
             paymentWindow.close();
           }
-
           // Update subscription with payment details
           await subscribe({
             subscriptionId,
-            paymentMethod: 'card', // or the actual payment method from status
+            xenditSubscriptionId: subscription.id,
+            paymentMethod: status.payment_methods[0].type, // or the actual payment method from status
             billingCycle,
-            paymentDetails: {
-              paymentId: subscription.id,
-              amount,
-              status: 'completed',
-              xenditSubscriptionId: subscription.id
-            }
           }).unwrap();
 
           setCurrentStep(2); // Move to confirmation step
@@ -93,7 +88,7 @@ const handleInitiatePayment = async () => {
       } catch (error) {
         console.error('Error checking subscription status:', error);
       }
-    }, 3000); // Check every 3 seconds
+    }, 10000); // Check every 3 seconds
 
     // Cleanup interval if modal is closed
     return () => {

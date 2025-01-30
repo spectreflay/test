@@ -46,8 +46,7 @@ router.get('/history', protect, async (req, res) => {
 // Subscribe or upgrade/downgrade
 router.post('/subscribe', protect, async (req, res) => {
   try {
-    const { subscriptionId, paymentMethod, paymentDetails, billingCycle = 'monthly' } = req.body;
-console.log(req.body,'data')
+    const { subscriptionId,xenditSubscriptionId, paymentMethod, billingCycle = 'monthly' } = req.body;
     // Get current subscription if exists
     const currentSubscription = await UserSubscription.findOne({
       user: req.user._id,
@@ -88,7 +87,6 @@ console.log(req.body,'data')
         endDate: currentSubscription.endDate,
         autoRenew: false,
         paymentMethod: currentSubscription.paymentMethod,
-        paymentDetails: currentSubscription.paymentDetails
       });
     }
 
@@ -96,13 +94,12 @@ console.log(req.body,'data')
     const userSubscription = await UserSubscription.create({
       user: req.user._id,
       subscription: subscriptionId,
+      xenditSubscriptionId,
       status: 'active',
       startDate,
       endDate,
       billingCycle,
-      prorationCredit,
       paymentMethod,
-      paymentDetails,
       autoRenew: true
     });
 
@@ -116,7 +113,6 @@ console.log(req.body,'data')
       endDate,
       autoRenew: true,
       paymentMethod,
-      paymentDetails
     });
 
     const populatedSubscription = await UserSubscription.findById(userSubscription._id)
@@ -156,7 +152,6 @@ router.post('/cancel', protect, async (req, res) => {
       endDate: subscription.endDate,
       autoRenew: false,
       paymentMethod: subscription.paymentMethod,
-      paymentDetails: subscription.paymentDetails
     });
 
     res.json({ message: 'Subscription cancelled successfully' });
@@ -204,7 +199,6 @@ router.put('/status', protect, async (req, res) => {
       endDate: subscription.endDate,
       autoRenew: false,
       paymentMethod: subscription.paymentMethod,
-      paymentDetails: subscription.paymentDetails
     });
 
     res.json({ 
