@@ -72,6 +72,15 @@ const handleSubscriptionActivated = async (data) => {
     xenditSubscriptionId: data.id,
   }).populate("user");
 
+  if (pendingSubscription.status === "active") {
+    await createNotification({
+      recipient: pendingSubscription.user,
+      message: "Your subscription is already active.",
+      type: "system",
+    });
+    return;
+  }
+
   if (!pendingSubscription) {
     throw new Error("Subscription not found");
   }
@@ -143,8 +152,19 @@ const handleSubscriptionFailed = async (data) => {
 // Handle subscription cancelled event
 const handleSubscriptionCancelled = async (data) => {
   const subscription = await UserSubscription.findOne({
+    status: "active",
     xenditSubscriptionId: data.id,
   }).populate("user");
+
+  if (subscription.status === "cancelled") {
+    // Create notification
+    await createNotification({
+      recipient: subscription.user,
+      message: "Your subscription is already cancelled.",
+      type: "system",
+    });
+    return;
+  }
 
   if (!subscription) {
     throw new Error("Subscription not found");

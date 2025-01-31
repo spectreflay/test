@@ -46,20 +46,20 @@ router.get('/history', protect, async (req, res) => {
 // Subscribe or upgrade/downgrade
 router.post('/subscribe', protect, async (req, res) => {
   try {
-    const { subscriptionId,xenditSubscriptionId, paymentMethod, billingCycle = 'monthly' } = req.body;
+    const { subscriptionId,xenditSubscriptionId, paymentMethod, billingCycle = 'monthly',status } = req.body;
     // Get current subscription if exists
-    const currentSubscription = await UserSubscription.findOne({
-      user: req.user._id,
-      status: 'active'
-    });
+    // const currentSubscription = await UserSubscription.findOne({
+    //   user: req.user._id,
+    //   status: 'active'
+    // });
 
     // Calculate proration if upgrading/downgrading
-    let prorationCredit = 0;
-    if (currentSubscription) {
-      const daysLeft = Math.ceil((new Date(currentSubscription.endDate) - new Date()) / (1000 * 60 * 60 * 24));
-      const dailyRate = currentSubscription.subscription.price / 30;
-      prorationCredit = daysLeft * dailyRate;
-    }
+    // let prorationCredit = 0;
+    // if (currentSubscription) {
+    //   const daysLeft = Math.ceil((new Date(currentSubscription.endDate) - new Date()) / (1000 * 60 * 60 * 24));
+    //   const dailyRate = currentSubscription.subscription.price / 30;
+    //   prorationCredit = daysLeft * dailyRate;
+    // }
 
     // Calculate end date based on billing cycle
     const startDate = new Date();
@@ -71,31 +71,31 @@ router.post('/subscribe', protect, async (req, res) => {
     }
 
     // Cancel current subscription
-    if (currentSubscription) {
-      currentSubscription.status = 'cancelled';
-      currentSubscription.autoRenew = false;
-      await currentSubscription.save();
+    // if (currentSubscription) {
+    //   currentSubscription.status = 'cancelled';
+    //   currentSubscription.autoRenew = false;
+    //   await currentSubscription.save();
 
-      // Record cancellation in history
-      await SubscriptionHistory.create({
-        user: req.user._id,
-        subscription: currentSubscription.subscription,
-        action: 'cancelled',
-        reason: 'upgrade/downgrade',
-        billingCycle: currentSubscription.billingCycle,
-        startDate: currentSubscription.startDate,
-        endDate: currentSubscription.endDate,
-        autoRenew: false,
-        paymentMethod: currentSubscription.paymentMethod,
-      });
-    }
+    //   // Record cancellation in history
+    //   await SubscriptionHistory.create({
+    //     user: req.user._id,
+    //     subscription: currentSubscription.subscription,
+    //     action: 'cancelled',
+    //     reason: 'upgrade/downgrade',
+    //     billingCycle: currentSubscription.billingCycle,
+    //     startDate: currentSubscription.startDate,
+    //     endDate: currentSubscription.endDate,
+    //     autoRenew: false,
+    //     paymentMethod: currentSubscription.paymentMethod,
+    //   });
+    // }
 
     // Create new subscription
     const userSubscription = await UserSubscription.create({
       user: req.user._id,
       subscription: subscriptionId,
       xenditSubscriptionId,
-      status: 'active',
+      status,
       startDate,
       endDate,
       billingCycle,
