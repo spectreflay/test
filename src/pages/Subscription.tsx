@@ -85,6 +85,7 @@ const SubscriptionPage = () => {
   };
 
   const handleSubscribe = async (subscription: any) => {
+  
     // Allow upgrading from a lower tier to a higher tier
     if (currentSubscription?.subscription._id === subscription._id) {
       toast.error("You are already subscribed to this plan");
@@ -125,7 +126,6 @@ const SubscriptionPage = () => {
       toast.error("Failed to update subscription status");
     }
   };
-
   return (
     <>
       <nav className="bg-white shadow-sm">
@@ -279,12 +279,14 @@ const SubscriptionPage = () => {
             })}
           </div>
         </div>
-{console.log(subscriptionHistory)}
+        {console.log(subscriptionHistory)}
         {showPaymentModal && selectedPlan && (
           <PaymentModal
             isOpen={showPaymentModal}
             onClose={() => setShowPaymentModal(false)}
             subscriptionId={selectedPlan._id}
+            subscriptionName={selectedPlan.name}
+            isSubscribed={currentSubscription ? true : false}
             amount={
               billingCycle === "yearly"
                 ? selectedPlan.yearlyPrice

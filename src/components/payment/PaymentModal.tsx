@@ -11,6 +11,8 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   subscriptionId: string;
+  subscriptionName: string;
+  isSubscribed: boolean;
   amount: number;
   billingCycle: 'monthly' | 'yearly';
   onSuccess: () => void;
@@ -22,6 +24,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
   subscriptionId,
+  subscriptionName,
+  isSubscribed,
   amount,
   billingCycle,
   onSuccess,
@@ -32,11 +36,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const isDevelopment = import.meta.env.MODE === 'development';
   const { user } = useSelector((state: RootState) => state.auth);
 
-  // In src/components/payment/PaymentModal.tsx
 
 const handleInitiatePayment = async () => {
   try {
     setIsProcessing(true);
+
+    //if no subscription is active
+    if(!isSubscribed){
+      await subscribe({
+        subscriptionId,
+        xenditSubscriptionId: '',
+        paymentMethod: 'FREE', // or the actual payment method from status
+        billingCycle,
+      }).unwrap();
+
+      setCurrentStep(2)
+      toast.success('Subscription activated successfully!');
+      setIsProcessing(false);
+      return;
+    }
 
     if (!user?.xenditCustomerId) {
       throw new Error('Customer ID not found');
@@ -71,7 +89,7 @@ const handleInitiatePayment = async () => {
           await subscribe({
             subscriptionId,
             xenditSubscriptionId: subscription.id,
-            paymentMethod: status.payment_methods[0].type, // or the actual payment method from status
+            paymentMethod: status.payment_methods[0].type,
             billingCycle,
           }).unwrap();
 
@@ -155,7 +173,7 @@ const handleInitiatePayment = async () => {
             {currentStep === 0 && (
               <div className="space-y-6">
                 <PaymentSummary
-                  planName={subscriptionId}
+                  planName={subscriptionName}
                   amount={amount}
                   billingCycle={billingCycle}
                 />
@@ -163,7 +181,7 @@ const handleInitiatePayment = async () => {
                   onClick={() => setCurrentStep(1)}
                   className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover"
                 >
-                  Continue to Payment
+                  {amount !== 0 ? 'Continue to Payment' : 'Next'}
                 </button>
               </div>
             )}
@@ -187,14 +205,14 @@ const handleInitiatePayment = async () => {
                 <div className="text-center space-y-4">
                   <CreditCard className="h-12 w-12 text-primary mx-auto" />
                   <p className="text-gray-600">
-                    You will be redirected to Xendit's secure payment page to complete your payment.
+                  {subscriptionName == 'free' ? 'You will activate the free plan.' : `You will be redirected to Xendit's secure payment page to complete your payment.`}
                   </p>
                   <button
                     onClick={handleInitiatePayment}
                     disabled={isProcessing}
                     className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
                   >
-                    {isProcessing ? 'Processing...' : 'Proceed to Payment'}
+                  {subscriptionName == 'free' ? (isProcessing ? 'Processing...' : 'Activate') : (isProcessing ? 'Processing...' : 'Proceed to Payment')}                    
                   </button>
                 </div>
               </div>
