@@ -16,8 +16,8 @@ const userSubscriptionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'cancelled', 'expired'],
-    default: 'active'
+    enum: ['pending', 'active', 'cancelled', 'expired'],
+    default: 'pending'
   },
   startDate: {
     type: Date,
@@ -39,7 +39,7 @@ const userSubscriptionSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay','CREDIT_CARD','CARD','DIRECT_DEBIT','EWALLET','FREE']
+    enum: ['card', 'paypal','free','ewallet','gcash','maya','grab_pay','CREDIT_CARD','CARD','DIRECT_DEBIT','EWALLET','FREE','PENDING']
   },
 }, {
   timestamps: true

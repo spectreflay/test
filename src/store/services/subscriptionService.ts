@@ -19,7 +19,7 @@ export interface UserSubscription {
   user: string;
   subscription: Subscription;
   xenditSubscriptionId: string;
-  status: "active" | "cancelled" | "expired";
+  status: "active" | "cancelled" | "expired" | "pending";
   startDate: string;
   endDate: string;
   autoRenew: boolean;
@@ -49,6 +49,8 @@ export interface SubscribeRequest {
   paymentMethod: string;
   billingCycle: "monthly" | "yearly";
   autoRenew?: boolean;
+  status: "active" | "cancelled" | "expired" | "pending";
+
 }
 
 export const subscriptionApi = api.injectEndpoints({

@@ -67,22 +67,34 @@ router.post("/xendit", async (req, res) => {
 
 // Handle subscription activated event
 const handleSubscriptionActivated = async (data) => {
-  const subscription = await UserSubscription.findOne({
+  const pendingSubscription = await UserSubscription.findOne({
+    status: "pending",
     xenditSubscriptionId: data.id,
   }).populate("user");
 
-  if (!subscription) {
+  if (!pendingSubscription) {
     throw new Error("Subscription not found");
   }
 
-  // Update subscription status
-  subscription.status = "active";
-  await subscription.save();
+  // Find and cancel current active subscription if exists
+  const currentSubscription = await UserSubscription.findOne({
+    user: pendingSubscription.user._id,
+    status: "active",
+  });
+
+  if (currentSubscription) {
+    currentSubscription.status = "cancelled";
+    await currentSubscription.save();
+  }
+
+  // Activate pending subscription
+  pendingSubscription.status = "active";
+  await pendingSubscription.save();
 
   // Create notification
   await createNotification({
-    recipient: subscription.user,
-    message: getSubscriptionNotificationMessage("subscription.activated"),
+    recipient: pendingSubscription.user,
+    message: "Your subscription has been successfully activated",
     type: "system",
   });
 };

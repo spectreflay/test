@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import { X, CreditCard, AlertCircle } from "lucide-react";
 import PaymentSummary from "./PaymentSummary";
-import {createSubscription, getSubscriptionStatus } from "../../utils/xendit";
-import { useSubscribeMutation } from "../../store/services/subscriptionService";
+import { createSubscription, getSubscriptionStatus } from "../../utils/xendit";
+import {
+  useSubscribeMutation,
+  useUpdateSubscriptionStatusMutation,
+} from "../../store/services/subscriptionService";
 import { toast } from "react-hot-toast";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store";
@@ -14,7 +17,7 @@ interface PaymentModalProps {
   subscriptionName: string;
   isSubscribed: boolean;
   amount: number;
-  billingCycle: 'monthly' | 'yearly';
+  billingCycle: "monthly" | "yearly";
   onSuccess: () => void;
 }
 
@@ -33,96 +36,107 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [subscribe] = useSubscribeMutation();
-  const isDevelopment = import.meta.env.MODE === 'development';
+  const [updateSubscriptionStatus] = useUpdateSubscriptionStatusMutation();
+  const isDevelopment = import.meta.env.MODE === "development";
   const { user } = useSelector((state: RootState) => state.auth);
 
+  const handleInitiatePayment = async () => {
+    try {
+      setIsProcessing(true);
 
-const handleInitiatePayment = async () => {
-  try {
-    setIsProcessing(true);
+      // If it's a free plan, handle differently
+      if (subscriptionName === "free") {
+        // Cancel current subscription if exists
+        if (isSubscribed) {
+          await updateSubscriptionStatus({ status: "cancelled" }).unwrap();
+        }
 
-    //if no subscription is active
-    if(!isSubscribed){
-      await subscribe({
+        // Activate free subscription
+        await subscribe({
+          subscriptionId,
+          xenditSubscriptionId: "",
+          paymentMethod: "FREE",
+          billingCycle,
+          status: "active",
+        }).unwrap();
+
+        setCurrentStep(2);
+        toast.success("Free plan activated successfully!");
+        setIsProcessing(false);
+        return;
+      }
+
+      if (!user?.xenditCustomerId) {
+        throw new Error("Customer ID not found");
+      }
+
+      // Create Xendit subscription
+      const subscription = await createSubscription(
+        `sub-${Date.now()}`,
+        user.xenditCustomerId,
+        amount,
+        billingCycle
+      );
+
+      if (!subscription.linkingUrl) {
+        throw new Error("No payment linking URL provided");
+      }
+
+      // Open payment window
+      const paymentWindow = window.open(
+        subscription.linkingUrl,
+        "xenditPayment",
+        "width=600,height=600"
+      );
+      
+      // First create a pending subscription
+      const pendingSubscription = await subscribe({
         subscriptionId,
-        xenditSubscriptionId: '',
-        paymentMethod: 'FREE', // or the actual payment method from status
+        xenditSubscriptionId: subscription.id,
+        paymentMethod: "PENDING",
         billingCycle,
+        status: "pending",
       }).unwrap();
 
-      setCurrentStep(2)
-      toast.success('Subscription activated successfully!');
-      setIsProcessing(false);
-      return;
-    }
-
-    if (!user?.xenditCustomerId) {
-      throw new Error('Customer ID not found');
-    }
-    
-    // Create subscription
-    const subscription = await createSubscription(
-      `sub-${Date.now()}`,
-      user.xenditCustomerId,
-      amount,
-      billingCycle
-    );
-
-    if (!subscription.linkingUrl) {
-      throw new Error('No payment linking URL provided');
-    }
-
-    // Open payment window
-    const paymentWindow = window.open(subscription.linkingUrl, 'xenditPayment', 'width=600,height=600');
-
-    // Start polling for subscription status
-    const pollInterval = setInterval(async () => {
-      try {
-        const status = await getSubscriptionStatus(subscription.id);
-        
-        if (status.status === 'ACTIVE') {
-          clearInterval(pollInterval);
-          if (paymentWindow) {
-            paymentWindow.close();
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await getSubscriptionStatus(subscription.id);
+          if (status.status === "ACTIVE") {
+            clearInterval(pollInterval);
+            if (paymentWindow) {
+              paymentWindow.close();
+            }
+            setCurrentStep(2); // Move to confirmation step
+            toast.success("Subscription activated successfully!");
+          } else if (
+            status.status === "FAILED" ||
+            status.status === "EXPIRED"
+          ) {
+            clearInterval(pollInterval);
+            if (paymentWindow) {
+              paymentWindow.close();
+            }
+            toast.error("Payment failed or expired");
+            setIsProcessing(false);
           }
-          // Update subscription with payment details
-          await subscribe({
-            subscriptionId,
-            xenditSubscriptionId: subscription.id,
-            paymentMethod: status.payment_methods[0].type,
-            billingCycle,
-          }).unwrap();
-
-          setCurrentStep(2); // Move to confirmation step
-          toast.success('Subscription activated successfully!');
-        } else if (status.status === 'FAILED' || status.status === 'EXPIRED') {
-          clearInterval(pollInterval);
-          if (paymentWindow) {
-            paymentWindow.close();
-          }
-          toast.error('Payment failed or expired');
-          setIsProcessing(false);
+        } catch (error) {
+          console.error("Error checking subscription status:", error);
         }
-      } catch (error) {
-        console.error('Error checking subscription status:', error);
-      }
-    }, 10000); // Check every 3 seconds
+      }, 10000);
 
-    // Cleanup interval if modal is closed
-    return () => {
-      clearInterval(pollInterval);
-      if (paymentWindow && !paymentWindow.closed) {
-        paymentWindow.close();
-      }
-    };
-
-  } catch (error) {
-    console.error('Payment error:', error);
-    toast.error('Failed to initiate payment');
-    setIsProcessing(false);
-  }
-};
-
+      // Cleanup interval if modal is closed
+      return () => {
+        clearInterval(pollInterval);
+        if (paymentWindow && !paymentWindow.closed) {
+          paymentWindow.close();
+        }
+      };
+    } catch (error) {
+      console.error("Payment error:", error);
+      toast.error("Failed to initiate payment");
+      setIsProcessing(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -144,23 +158,29 @@ const handleInitiatePayment = async () => {
           {STEPS.map((step, index) => (
             <React.Fragment key={step}>
               {index > 0 && (
-                <div className={`h-1 w-16 mx-2 self-center ${
-                  index <= currentStep ? 'bg-primary' : 'bg-gray-200'
-                }`} />
+                <div
+                  className={`h-1 w-16 mx-2 self-center ${
+                    index <= currentStep ? "bg-primary" : "bg-gray-200"
+                  }`}
+                />
               )}
               <div className="flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  index < currentStep
-                    ? 'bg-primary text-white'
-                    : index === currentStep
-                    ? 'bg-primary/10 text-primary border-2 border-primary'
-                    : 'bg-gray-100 text-gray-400'
-                }`}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    index < currentStep
+                      ? "bg-primary text-white"
+                      : index === currentStep
+                      ? "bg-primary/10 text-primary border-2 border-primary"
+                      : "bg-gray-100 text-gray-400"
+                  }`}
+                >
                   {index + 1}
                 </div>
-                <span className={`text-sm mt-2 ${
-                  index <= currentStep ? 'text-primary' : 'text-gray-400'
-                }`}>
+                <span
+                  className={`text-sm mt-2 ${
+                    index <= currentStep ? "text-primary" : "text-gray-400"
+                  }`}
+                >
                   {step}
                 </span>
               </div>
@@ -181,7 +201,7 @@ const handleInitiatePayment = async () => {
                   onClick={() => setCurrentStep(1)}
                   className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover"
                 >
-                  {amount !== 0 ? 'Continue to Payment' : 'Next'}
+                  {amount !== 0 ? "Continue to Payment" : "Next"}
                 </button>
               </div>
             )}
@@ -193,26 +213,37 @@ const handleInitiatePayment = async () => {
                     <div className="flex items-start">
                       <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-2" />
                       <div>
-                        <p className="text-sm text-blue-700 font-medium">Development Mode</p>
+                        <p className="text-sm text-blue-700 font-medium">
+                          Development Mode
+                        </p>
                         <p className="text-sm text-blue-600 mt-1">
-                          You will be redirected to Xendit's test payment page. Use test card details or test e-wallet credentials.
+                          You will be redirected to Xendit's test payment page.
+                          Use test card details or test e-wallet credentials.
                         </p>
                       </div>
                     </div>
                   </div>
                 )}
-                
+
                 <div className="text-center space-y-4">
                   <CreditCard className="h-12 w-12 text-primary mx-auto" />
                   <p className="text-gray-600">
-                  {subscriptionName == 'free' ? 'You will activate the free plan.' : `You will be redirected to Xendit's secure payment page to complete your payment.`}
+                    {subscriptionName == "free"
+                      ? "You will activate the free plan."
+                      : `You will be redirected to Xendit's secure payment page to complete your payment.`}
                   </p>
                   <button
                     onClick={handleInitiatePayment}
                     disabled={isProcessing}
                     className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
                   >
-                  {subscriptionName == 'free' ? (isProcessing ? 'Processing...' : 'Activate') : (isProcessing ? 'Processing...' : 'Proceed to Payment')}                    
+                    {subscriptionName == "free"
+                      ? isProcessing
+                        ? "Processing..."
+                        : "Activate"
+                      : isProcessing
+                      ? "Processing..."
+                      : "Proceed to Payment"}
                   </button>
                 </div>
               </div>
@@ -242,7 +273,8 @@ const handleInitiatePayment = async () => {
                     Payment Successful!
                   </h3>
                   <p className="mt-2 text-gray-600">
-                    Thank you for your subscription. Your payment has been processed successfully.
+                    Thank you for your subscription. Your payment has been
+                    processed successfully.
                   </p>
                 </div>
                 <button
