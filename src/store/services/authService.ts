@@ -71,11 +71,10 @@ export const authApi = api.injectEndpoints({
             await dispatch(
               subscriptionApi.endpoints.subscribe.initiate({
                 subscriptionId: freeTier._id,
-                paymentMethod: "free",
-                billingCycle: "monthly", // Add default billing cycle
-                paymentDetails: {
-                  status: "completed",
-                },
+                xenditSubscriptionId: "",
+                paymentMethod: "FREE",
+                billingCycle: "monthly",
+                status: "active",
               })
             ).unwrap();
 

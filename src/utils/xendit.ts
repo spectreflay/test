@@ -20,10 +20,7 @@ const handleXenditError = (error: any) => {
 };
 
 // Create customer in Xendit
-export const createCustomer = async (
-  name: string,
-  email: string,
-) => {
+export const createCustomer = async (name: string, email: string) => {
   try {
     const response = await xenditAxios.post("/customers", {
       reference_id: `cust-${Date.now()}`,
@@ -87,9 +84,9 @@ export const createSubscription = async (
 
     // Find the AUTH linking URL from actions array
     const linkingAction = response.data.actions?.find(
-      (action:any) => action.action === "AUTH"
+      (action: any) => action.action === "AUTH"
     );
-    
+
     const linkingUrl = linkingAction?.url || null;
 
     return { ...response.data, linkingUrl };
@@ -98,11 +95,12 @@ export const createSubscription = async (
   }
 };
 
-
 // Get subscription status
 export const getSubscriptionStatus = async (subscriptionId: string) => {
   try {
-    const response = await xenditAxios.get(`/recurring/plans/${subscriptionId}`);
+    const response = await xenditAxios.get(
+      `/recurring/plans/${subscriptionId}`
+    );
     return response.data;
   } catch (error) {
     handleXenditError(error);
@@ -111,10 +109,11 @@ export const getSubscriptionStatus = async (subscriptionId: string) => {
 
 export const cancelSubscription = async (subscriptionId: string) => {
   try {
-    const response = await xenditAxios.get(`/recurring/plans/${subscriptionId}`);
+    const response = await xenditAxios.get(
+      `/recurring/plans/${subscriptionId}`
+    );
     return response.data;
   } catch (error) {
     handleXenditError(error);
   }
 };
-
