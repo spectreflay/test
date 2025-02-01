@@ -45,15 +45,17 @@ router.post("/xendit", async (req, res) => {
       case "recurring.plan.failed":
         await handleSubscriptionFailed(data);
         break;
-      case "recurring.plan.inactived":
+      case "recurring.plan.inactivated":
         await handleSubscriptionCancelled(data);
         break;
       case "recurring.cycle.succeeded":
-        await handleSubscriptionCycleSucceeded();
+        await handleSubscriptionCycleSucceeded(data);
         break;
       case "recurring.cycle.created":
-        await handleSubscriptionCycleCreated();
+        await handleSubscriptionCycleCreated(data);
         break;
+      case "payment_method.activated":
+        await handleSubscriptionPaymentMethod(data);
       default:
         console.log(`Unhandled event type: ${event}`);
     }
@@ -68,7 +70,6 @@ router.post("/xendit", async (req, res) => {
 // Handle subscription activated event
 const handleSubscriptionActivated = async (data) => {
   const pendingSubscription = await UserSubscription.findOne({
-    status: "pending",
     xenditSubscriptionId: data.id,
   }).populate("user");
 
@@ -98,6 +99,13 @@ const handleSubscriptionActivated = async (data) => {
 
   // Activate pending subscription
   pendingSubscription.status = "active";
+
+  // Checking payment methods
+  if (Array.isArray(data.payment_methods) && data.payment_methods.length > 0) {
+    pendingSubscription.paymentMethod = data.payment_methods[0].type;
+  } else {
+    pendingSubscription.paymentMethod = "UNKNOWN"; // Default value in case of missing data
+  }
   await pendingSubscription.save();
 
   // Create notification
@@ -152,7 +160,6 @@ const handleSubscriptionFailed = async (data) => {
 // Handle subscription cancelled event
 const handleSubscriptionCancelled = async (data) => {
   const subscription = await UserSubscription.findOne({
-    status: "active",
     xenditSubscriptionId: data.id,
   }).populate("user");
 
@@ -161,6 +168,16 @@ const handleSubscriptionCancelled = async (data) => {
     await createNotification({
       recipient: subscription.user,
       message: "Your subscription is already cancelled.",
+      type: "system",
+    });
+    return;
+  }
+
+  if (subscription.status === "expired") {
+    // Create notification
+    await createNotification({
+      recipient: subscription.user,
+      message: "Your subscription is expired please contact the administrator.",
       type: "system",
     });
     return;
@@ -188,11 +205,29 @@ const handleSubscriptionCycleCreated = async (data) => {
     xenditSubscriptionId: data.plan_id,
   }).populate("user");
 
-  await createNotification({
-    recipient: subscription.user,
-    message: `Your subscription next billing will be scheduled on ${data.scheduled_timestamp}.`,
-    type: "system",
-  });
+  if (subscription) {
+    // Update next billing cycle dates
+    // subscription.startDate = new Date(data.scheduled_timestamp);
+
+    // Extend the subscription based on billing cycle
+    const newEndDate = new Date(subscription.endDate);
+    if (subscription.billingCycle === "monthly") {
+      newEndDate.setMonth(newEndDate.getMonth() + 1);
+    } else if (subscription.billingCycle === "yearly") {
+      newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+    }
+    // subscription.endDate = newEndDate;
+
+    // await subscription.save();
+
+    await createNotification({
+      recipient: subscription.user,
+      message: `Your next subscription cycle is scheduled to start on ${new Date(
+        data.scheduled_timestamp
+      ).toLocaleDateString()} and will be valid until ${newEndDate.toLocaleDateString()}.`,
+      type: "system",
+    });
+  }
 };
 
 const handleSubscriptionCycleSucceeded = async (data) => {
@@ -200,11 +235,44 @@ const handleSubscriptionCycleSucceeded = async (data) => {
     xenditSubscriptionId: data.plan_id,
   }).populate("user");
 
-  await createNotification({
-    recipient: subscription.user,
-    message: `Your subscription billing date ${data.scheduled_timestamp} is succesfully paid.`,
-    type: "system",
-  });
+  if (subscription) {
+    // Update subscription data
+    const currentDate = new Date(data.scheduled_timestamp);
+
+    // Only update the start date if the current date is after the existing start date
+    if (currentDate > subscription.startDate) {
+      subscription.startDate = currentDate;
+    }
+
+    // Calculate the new end date based on the billing cycle
+    let newEndDate;
+    if (subscription.billingCycle === "monthly") {
+      newEndDate = new Date(currentDate);
+      newEndDate.setMonth(newEndDate.getMonth() + 1);
+    } else if (subscription.billingCycle === "yearly") {
+      newEndDate = new Date(currentDate);
+      newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+    }
+
+    // Only update the end date if the new end date is later than the existing end date
+    if (newEndDate > subscription.endDate) {
+      subscription.endDate = newEndDate;
+    }
+
+    await subscription.save();
+
+    await createNotification({
+      recipient: subscription.user,
+      message: `Your subscription payment for ${data.amount} ${
+        data.currency
+      } on ${currentDate.toLocaleDateString()} was successful. Your subscription is valid until ${subscription.endDate.toLocaleDateString()}.`,
+      type: "system",
+    });
+  } else {
+    console.error(`No subscription found for plan_id: ${data.plan_id}`);
+  }
 };
+
+const handleSubscriptionPaymentMethod = async (data) => {};
 
 export default router;
