@@ -38,7 +38,6 @@ import EmailVerification from "./pages/EmailVerification";
 import ResendVerification from "./pages/ResendVerification";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import SubscriptionRestrictedRoute from "./components/subscription/subscriptionRestrictedRoute";
 import { subscriptionManager } from "./utils/subscription/subscriptionManager";
 
 function App() {
@@ -146,11 +145,11 @@ function App() {
             <Route
               path="products"
               element={
-                <SubscriptionRestrictedRoute
-                  requiredFeature={PERMISSIONS.MANAGE_INVENTORY}
+                <ProtectedRoute
+                  requiredPermission={PERMISSIONS.MANAGE_INVENTORY}
                 >
                   <Products />
-                </SubscriptionRestrictedRoute>
+                </ProtectedRoute>
               }
             />
             <Route
