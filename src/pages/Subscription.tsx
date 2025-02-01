@@ -5,7 +5,6 @@ import { toast } from "react-hot-toast";
 import {
   useGetSubscriptionsQuery,
   useGetCurrentSubscriptionQuery,
-  useSubscribeMutation,
   useVerifySubscriptionMutation,
   useGetSubscriptionHistoryQuery,
 } from "../store/services/subscriptionService";
@@ -18,7 +17,6 @@ const SubscriptionPage = () => {
   const { data: currentSubscription, refetch: refetchCurrentSubscription } =
     useGetCurrentSubscriptionQuery();
   const { data: subscriptionHistory } = useGetSubscriptionHistoryQuery();
-  const [subscribe] = useSubscribeMutation();
   const [verifySubscription] = useVerifySubscriptionMutation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,30 +27,29 @@ const SubscriptionPage = () => {
   );
   const [showHistory, setShowHistory] = useState(false);
 
-  // Calculate price based on billing cycle
-  const calculatePrice = (subscription: any) => {
-    if (billingCycle === "yearly") {
-      return subscription.yearlyPrice.toFixed(2);
-    }
-    return subscription.monthlyPrice.toFixed(2);
-  };
-
   const calculatePriceDisplay = (subscription: any) => {
-    const originalPrice =
-      billingCycle === "yearly"
-        ? subscription.monthlyPrice * 12 // Show annual price without discount
-        : subscription.monthlyPrice;
+    const monthlyPrice = subscription.monthlyPrice;
+    const originalYearlyPrice = subscription.yearlyPrice;
+    const discountPercentage = 20; // 20% discount
 
-    const discountedPrice =
-      billingCycle === "yearly"
-        ? subscription.yearlyPrice // Already discounted
-        : subscription.monthlyPrice;
+    if (billingCycle === "yearly") {
+      const discountedYearlyPrice =
+        originalYearlyPrice * (1 - discountPercentage / 100);
 
-    return {
-      original: originalPrice.toFixed(2),
-      discounted: discountedPrice.toFixed(2),
-      hasDiscount: billingCycle === "yearly",
-    };
+      return {
+        original: originalYearlyPrice.toFixed(2),
+        discounted: discountedYearlyPrice.toFixed(2),
+        hasDiscount: true,
+        discountPercentage,
+      };
+    } else {
+      return {
+        original: monthlyPrice.toFixed(2),
+        discounted: monthlyPrice.toFixed(2),
+        hasDiscount: false,
+        discountPercentage: 0,
+      };
+    }
   };
 
   // Handle payment status from URL parameters
@@ -85,7 +82,6 @@ const SubscriptionPage = () => {
   };
 
   const handleSubscribe = async (subscription: any) => {
-  
     // Allow upgrading from a lower tier to a higher tier
     if (currentSubscription?.subscription._id === subscription._id) {
       toast.error("You are already subscribed to this plan");
@@ -289,7 +285,7 @@ const SubscriptionPage = () => {
             isSubscribed={currentSubscription ? true : false}
             amount={
               billingCycle === "yearly"
-                ? selectedPlan.yearlyPrice
+                ? selectedPlan.yearlyPrice * (1 - 20 / 100)
                 : selectedPlan.monthlyPrice
             }
             onSuccess={handlePaymentSuccess}
