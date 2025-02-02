@@ -16,7 +16,7 @@ interface PaymentModalProps {
   subscriptionId: string;
   subscriptionName: string;
   isSubscribed: boolean;
-  amount: number;
+  amount: any;
   billingCycle: "monthly" | "yearly";
   onSuccess: () => void;
 }
@@ -43,7 +43,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const handleInitiatePayment = async () => {
     try {
       setIsProcessing(true);
-
+      //conver amount string into a number by removing money sign
+      const amountNumber = parseFloat(amount.replace(/[^0-9.-]+/g, ""));
       // If it's a free plan, handle differently
       if (subscriptionName === "free") {
         // Cancel current subscription if exists
@@ -74,7 +75,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const subscription = await createSubscription(
         `sub-${Date.now()}`,
         user.xenditCustomerId,
-        amount,
+        amountNumber,
         billingCycle
       );
 

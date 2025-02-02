@@ -26,7 +26,7 @@ const PaymentSummary: React.FC<PaymentSummaryProps> = ({ planName, amount, billi
       <div className="border-t border-gray-200 pt-4">
         <div className="flex justify-between">
           <span className="font-medium text-gray-900">Total</span>
-          <span className="font-medium text-gray-900">${amount.toFixed(2)}</span>
+          <span className="font-medium text-gray-900">{amount}</span>
         </div>
       </div>
 

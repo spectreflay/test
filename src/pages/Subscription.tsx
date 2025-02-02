@@ -32,20 +32,28 @@ const SubscriptionPage = () => {
     const originalYearlyPrice = subscription.yearlyPrice;
     const discountPercentage = 20; // 20% discount
 
+    // Create a formatter for currency
+    const formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
     if (billingCycle === "yearly") {
       const discountedYearlyPrice =
         originalYearlyPrice * (1 - discountPercentage / 100);
 
       return {
-        original: originalYearlyPrice.toFixed(2),
-        discounted: discountedYearlyPrice.toFixed(2),
+        original: formatter.format(originalYearlyPrice), // Divide by 100 if the price is in cents
+        discounted: formatter.format(discountedYearlyPrice), // Divide by 100 if the price is in cents
         hasDiscount: true,
         discountPercentage,
       };
     } else {
       return {
-        original: monthlyPrice.toFixed(2),
-        discounted: monthlyPrice.toFixed(2),
+        original: formatter.format(monthlyPrice), // Divide by 100 if the price is in cents
+        discounted: formatter.format(monthlyPrice), // Divide by 100 if the price is in cents
         hasDiscount: false,
         discountPercentage: 0,
       };
@@ -198,12 +206,12 @@ const SubscriptionPage = () => {
                     <div className="mt-8">
                       {priceDisplay.hasDiscount && (
                         <span className="text-lg line-through text-gray-400 block">
-                          ${priceDisplay.original}
+                          {priceDisplay.original}
                         </span>
                       )}
                       <div className="flex items-baseline">
                         <span className="text-4xl font-extrabold text-gray-900">
-                          ${priceDisplay.discounted}
+                          {priceDisplay.discounted}
                         </span>
                         <span className="text-base font-medium text-gray-500">
                           /{billingCycle}
@@ -283,11 +291,7 @@ const SubscriptionPage = () => {
             subscriptionId={selectedPlan._id}
             subscriptionName={selectedPlan.name}
             isSubscribed={currentSubscription ? true : false}
-            amount={
-              billingCycle === "yearly"
-                ? selectedPlan.yearlyPrice * (1 - 20 / 100)
-                : selectedPlan.monthlyPrice
-            }
+            amount={calculatePriceDisplay(selectedPlan).discounted}
             onSuccess={handlePaymentSuccess}
             billingCycle={billingCycle}
           />
