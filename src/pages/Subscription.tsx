@@ -174,113 +174,117 @@ const SubscriptionPage = () => {
           <BillingCycleToggle cycle={billingCycle} onChange={setBillingCycle} />
 
           <div className="mt-12 space-y-4 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-3 sm:gap-6 lg:max-w-4xl lg:mx-auto xl:max-w-none xl:mx-0">
-            {subscriptions?.map((subscription) => {
-              const isCurrentPlan =
-                currentSubscription?.subscription._id === subscription._id;
-              const priceDisplay = calculatePriceDisplay(subscription);
+            {subscriptions
+              ?.slice()
+              .sort((a, b) => getTierLevel(a.name) - getTierLevel(b.name)) // Sort by tier level
+              .map((subscription) => {
+                const isCurrentPlan =
+                  currentSubscription?.subscription._id === subscription._id;
+                const priceDisplay = calculatePriceDisplay(subscription);
 
-              return (
-                <div
-                  key={subscription._id}
-                  className={`bg-white border-2 rounded-lg shadow-sm divide-y divide-gray-200 ${
-                    isCurrentPlan ? "border-primary" : "border-gray-200"
-                  }`}
-                >
-                  <div className="p-6">
-                    <h3 className="text-lg font-medium text-gray-900 flex justify-between">
-                      <span className="capitalize">{subscription.name}</span>
-                      {isCurrentPlan && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Current Plan
-                        </span>
-                      )}
-                    </h3>
-                    <p className="mt-4 text-sm text-gray-500">
-                      Perfect for{" "}
-                      {subscription.name === "free"
-                        ? "getting started"
-                        : subscription.name === "basic"
-                        ? "small businesses"
-                        : "growing businesses"}
-                    </p>
-                    <div className="mt-8">
-                      {priceDisplay.hasDiscount && (
-                        <span className="text-lg line-through text-gray-400 block">
-                          {priceDisplay.original}
-                        </span>
-                      )}
-                      <div className="flex items-baseline">
-                        <span className="text-4xl font-extrabold text-gray-900">
-                          {priceDisplay.discounted}
-                        </span>
-                        <span className="text-base font-medium text-gray-500">
-                          /{billingCycle}
-                        </span>
+                return (
+                  <div
+                    key={subscription._id}
+                    className={`bg-white border-2 rounded-lg shadow-sm divide-y divide-gray-200 ${
+                      isCurrentPlan ? "border-primary" : "border-gray-200"
+                    }`}
+                  >
+                    <div className="p-6">
+                      <h3 className="text-lg font-medium text-gray-900 flex justify-between">
+                        <span className="capitalize">{subscription.name}</span>
+                        {isCurrentPlan && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Current Plan
+                          </span>
+                        )}
+                      </h3>
+                      <p className="mt-4 text-sm text-gray-500">
+                        Perfect for{" "}
+                        {subscription.name === "free"
+                          ? "getting started"
+                          : subscription.name === "basic"
+                          ? "small businesses"
+                          : "growing businesses"}
+                      </p>
+                      <div className="mt-8">
+                        {priceDisplay.hasDiscount && (
+                          <span className="text-lg line-through text-gray-400 block">
+                            {priceDisplay.original}
+                          </span>
+                        )}
+                        <div className="flex items-baseline">
+                          <span className="text-4xl font-extrabold text-gray-900">
+                            {priceDisplay.discounted}
+                          </span>
+                          <span className="text-base font-medium text-gray-500">
+                            /{billingCycle}
+                          </span>
+                        </div>
+                        {billingCycle === "yearly" && (
+                          <span className="text-sm text-green-600 mt-1 block">
+                            Save 20% with annual billing
+                          </span>
+                        )}
                       </div>
-                      {billingCycle === "yearly" && (
-                        <span className="text-sm text-green-600 mt-1 block">
-                          Save 20% with annual billing
-                        </span>
-                      )}
+                      <button
+                        onClick={() => handleSubscribe(subscription)}
+                        disabled={isCurrentPlan}
+                        className={`mt-8 block w-full py-2 px-4 border border-transparent rounded-md text-white text-center font-medium ${
+                          isCurrentPlan
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-primary hover:bg-primary-hover"
+                        }`}
+                      >
+                        {isCurrentPlan ? "Current Plan" : "Subscribe"}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleSubscribe(subscription)}
-                      disabled={isCurrentPlan}
-                      className={`mt-8 block w-full py-2 px-4 border border-transparent rounded-md text-white text-center font-medium ${
-                        isCurrentPlan
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-primary hover:bg-primary-hover"
-                      }`}
-                    >
-                      {isCurrentPlan ? "Current Plan" : "Subscribe"}
-                    </button>
-                  </div>
-                  <div className="px-6 pt-6 pb-8">
-                    <h4 className="text-sm font-medium text-gray-900 tracking-wide">
-                      What's included
-                    </h4>
-                    <ul className="mt-6 space-y-4">
-                      <li className="flex items-start">
-                        <span className="text-green-500 flex-shrink-0">
-                          <Check className="h-5 w-5" />
-                        </span>
-                        <span className="ml-3 text-sm text-gray-700">
-                          Up to {subscription.maxProducts.toLocaleString()}{" "}
-                          products
-                        </span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-green-500 flex-shrink-0">
-                          <Check className="h-5 w-5" />
-                        </span>
-                        <span className="ml-3 text-sm text-gray-700">
-                          Up to {subscription.maxStaff.toLocaleString()} staff
-                          members
-                        </span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-green-500 flex-shrink-0">
-                          <Check className="h-5 w-5" />
-                        </span>
-                        <span className="ml-3 text-sm text-gray-700">
-                          Up to {subscription.maxStores.toLocaleString()} stores
-                        </span>
-                      </li>
-                      {subscription.features.map((feature) => (
-                        <li key={feature} className="flex items-start">
+                    <div className="px-6 pt-6 pb-8">
+                      <h4 className="text-sm font-medium text-gray-900 tracking-wide">
+                        What's included
+                      </h4>
+                      <ul className="mt-6 space-y-4">
+                        <li className="flex items-start">
                           <span className="text-green-500 flex-shrink-0">
                             <Check className="h-5 w-5" />
                           </span>
                           <span className="ml-3 text-sm text-gray-700">
-                            {feature.split("_").join(" ").toUpperCase()}
+                            Up to {subscription.maxProducts.toLocaleString()}{" "}
+                            products
                           </span>
                         </li>
-                      ))}
-                    </ul>
+                        <li className="flex items-start">
+                          <span className="text-green-500 flex-shrink-0">
+                            <Check className="h-5 w-5" />
+                          </span>
+                          <span className="ml-3 text-sm text-gray-700">
+                            Up to {subscription.maxStaff.toLocaleString()} staff
+                            members
+                          </span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="text-green-500 flex-shrink-0">
+                            <Check className="h-5 w-5" />
+                          </span>
+                          <span className="ml-3 text-sm text-gray-700">
+                            Up to {subscription.maxStores.toLocaleString()}{" "}
+                            stores
+                          </span>
+                        </li>
+                        {subscription.features.map((feature) => (
+                          <li key={feature} className="flex items-start">
+                            <span className="text-green-500 flex-shrink-0">
+                              <Check className="h-5 w-5" />
+                            </span>
+                            <span className="ml-3 text-sm text-gray-700">
+                              {feature.split("_").join(" ").toUpperCase()}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
         {console.log(subscriptionHistory)}

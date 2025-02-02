@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, CreditCard, AlertCircle } from "lucide-react";
+import { X, CreditCard, AlertCircle, ArrowLeft } from "lucide-react";
 import PaymentSummary from "./PaymentSummary";
 import { createSubscription, getSubscriptionStatus } from "../../utils/xendit";
 import {
@@ -39,20 +39,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [updateSubscriptionStatus] = useUpdateSubscriptionStatusMutation();
   const isDevelopment = import.meta.env.MODE === "development";
   const { user } = useSelector((state: RootState) => state.auth);
+  const amountNumber = parseFloat(amount.replace(/[^0-9.-]+/g, "")); //conver amount into number
 
   const handleInitiatePayment = async () => {
     try {
       setIsProcessing(true);
-      //conver amount string into a number by removing money sign
-      const amountNumber = parseFloat(amount.replace(/[^0-9.-]+/g, ""));
-      // If it's a free plan, handle differently
+
       if (subscriptionName === "free") {
-        // Cancel current subscription if exists
         if (isSubscribed) {
           await updateSubscriptionStatus({ status: "cancelled" }).unwrap();
         }
 
-        // Activate free subscription
         await subscribe({
           subscriptionId,
           xenditSubscriptionId: "",
@@ -71,7 +68,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         throw new Error("Customer ID not found");
       }
 
-      // Create Xendit subscription
       const subscription = await createSubscription(
         `sub-${Date.now()}`,
         user.xenditCustomerId,
@@ -83,14 +79,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         throw new Error("No payment linking URL provided");
       }
 
-      // Open payment window
       const paymentWindow = window.open(
         subscription.linkingUrl,
         "xenditPayment",
         "width=600,height=600"
       );
-      
-      // First create a pending subscription
+
       const pendingSubscription = await subscribe({
         subscriptionId,
         xenditSubscriptionId: subscription.id,
@@ -107,7 +101,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             if (paymentWindow) {
               paymentWindow.close();
             }
-            setCurrentStep(2); // Move to confirmation step
+            setCurrentStep(2);
             toast.success("Subscription activated successfully!");
           } else if (
             status.status === "FAILED" ||
@@ -125,7 +119,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         }
       }, 10000);
 
-      // Cleanup interval if modal is closed
       return () => {
         clearInterval(pollInterval);
         if (paymentWindow && !paymentWindow.closed) {
@@ -190,7 +183,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
+          <div className={`${currentStep === 0 ? "col-span-full" : ""} `}>
             {currentStep === 0 && (
               <div className="space-y-6">
                 <PaymentSummary
@@ -198,15 +191,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   amount={amount}
                   billingCycle={billingCycle}
                 />
+
                 <button
                   onClick={() => setCurrentStep(1)}
                   className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover"
                 >
-                  {amount !== 0 ? "Continue to Payment" : "Next"}
+                  {amountNumber !== 0 ? "Continue to Payment" : "Next"}
                 </button>
               </div>
             )}
-
             {currentStep === 1 && (
               <div className="space-y-6">
                 {isDevelopment && (
@@ -233,19 +226,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       ? "You will activate the free plan."
                       : `You will be redirected to Xendit's secure payment page to complete your payment.`}
                   </p>
-                  <button
-                    onClick={handleInitiatePayment}
-                    disabled={isProcessing}
-                    className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
-                  >
-                    {subscriptionName == "free"
-                      ? isProcessing
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={handleInitiatePayment}
+                      disabled={isProcessing}
+                      className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
+                    >
+                      {subscriptionName == "free"
+                        ? isProcessing
+                          ? "Processing..."
+                          : "Activate"
+                        : isProcessing
                         ? "Processing..."
-                        : "Activate"
-                      : isProcessing
-                      ? "Processing..."
-                      : "Proceed to Payment"}
-                  </button>
+                        : "Proceed to Payment"}
+                    </button>
+                    <button
+                      onClick={() => setCurrentStep(0)}
+                      className="flex items-center justify-center w-full py-3 text-gray-600 hover:text-gray-900"
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Back to Summary
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -285,16 +287,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   Continue to Dashboard
                 </button>
               </div>
+              
             )}
           </div>
 
-          <div className="hidden md:block">
-            <PaymentSummary
-              planName={subscriptionId}
-              amount={amount}
-              billingCycle={billingCycle}
-            />
-          </div>
+          {currentStep !== 0 && (
+            <div className="hidden md:block">
+              <PaymentSummary
+                planName={subscriptionName}
+                amount={amount}
+                billingCycle={billingCycle}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
